@@ -1,0 +1,19 @@
+{
+	"name": "SveltePress Magazine",
+	"version": "1.0.0",
+	"author": "SveltePress",
+	"description": "A bold magazine-style theme with multi-column layouts and featured content areas.",
+	"screenshot": "/themes/magazine/screenshot.png",
+	"supports": ["featured-images", "post-formats", "widgets", "custom-header"],
+	"menus": {
+		"primary": "Primary Navigation",
+		"secondary": "Secondary Navigation",
+		"footer": "Footer Menu"
+	},
+	"widget_areas": {
+		"sidebar": "Sidebar",
+		"featured": "Featured Area",
+		"footer-1": "Footer Column 1",
+		"footer-2": "Footer Column 2"
+	}
+}

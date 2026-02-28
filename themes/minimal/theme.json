@@ -1,0 +1,14 @@
+{
+	"name": "SveltePress Minimal",
+	"version": "1.0.0",
+	"author": "SveltePress",
+	"description": "A clean, minimal theme focused on typography and readability.",
+	"screenshot": "/themes/minimal/screenshot.png",
+	"supports": ["featured-images", "widgets"],
+	"menus": {
+		"primary": "Primary Navigation"
+	},
+	"widget_areas": {
+		"sidebar": "Sidebar"
+	}
+}

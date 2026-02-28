@@ -1,0 +1,6 @@
+{
+	"name": "SveltePress Akismet",
+	"version": "1.0.0",
+	"author": "SveltePress",
+	"description": "Basic comment spam filtering. Marks comments with suspicious content as spam."
+}

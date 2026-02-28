@@ -1,0 +1,6 @@
+{
+	"name": "SveltePress SEO",
+	"version": "1.0.0",
+	"author": "SveltePress",
+	"description": "Adds SEO meta tags (title, description, Open Graph) to your site."
+}

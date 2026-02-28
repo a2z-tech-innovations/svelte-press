@@ -1,0 +1,18 @@
+{
+	"name": "SveltePress Default",
+	"version": "1.0.0",
+	"author": "SveltePress",
+	"description": "The default SveltePress theme. Clean, fast, and fully featured.",
+	"screenshot": "/themes/default/screenshot.png",
+	"supports": ["featured-images", "post-formats", "custom-logo", "widgets"],
+	"menus": {
+		"primary": "Primary Navigation",
+		"footer": "Footer Menu"
+	},
+	"widget_areas": {
+		"sidebar": "Sidebar",
+		"footer-1": "Footer Column 1",
+		"footer-2": "Footer Column 2",
+		"footer-3": "Footer Column 3"
+	}
+}

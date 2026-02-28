@@ -1,0 +1,76 @@
+import { redirect, fail } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types.js';
+import { db } from '$lib/server/db/index.js';
+import { posts, users, revisions } from '$lib/server/db/schema.js';
+import { eq, sql, and, ne } from 'drizzle-orm';
+import { slugify } from '$lib/utils.js';
+import { nanoid } from 'nanoid';
+
+export const load: PageServerLoad = async () => {
+	const allPages = db
+		.select({ id: posts.id, title: posts.title, parentId: posts.parentId })
+		.from(posts)
+		.where(and(eq(posts.postType, 'page'), ne(posts.status, 'trash')))
+		.all();
+
+	const allUsers = db.select({
+		id: users.id,
+		displayName: users.displayName,
+		username: users.username
+	}).from(users).all();
+
+	return { allPages, allUsers };
+};
+
+export const actions: Actions = {
+	save: async ({ request, locals }) => {
+		const data = await request.formData();
+		const title = String(data.get('title') ?? '').trim();
+		const contentRaw = String(data.get('content') ?? '[]');
+		const status = String(data.get('status') ?? 'draft') as 'draft' | 'publish' | 'private' | 'pending';
+		const excerpt = String(data.get('excerpt') ?? '');
+		const slugVal = String(data.get('slug') ?? '').trim() || slugify(title) || nanoid(8);
+		const authorId = Number(data.get('authorId') ?? locals.user!.id);
+		const parentId = Number(data.get('parentId') ?? 0) || null;
+		const menuOrder = Number(data.get('menuOrder') ?? 0);
+		const template = String(data.get('template') ?? '');
+		const commentStatus = data.get('commentStatus') === 'open' ? 'open' : 'closed';
+
+		if (!title) return fail(400, { error: 'Title is required.' });
+
+		let content: unknown[] = [];
+		try { content = JSON.parse(contentRaw); } catch { content = []; }
+
+		const now = new Date();
+		const postDate = status === 'publish' ? now : null;
+
+		const result = await db.insert(posts).values({
+			title,
+			slug: slugVal,
+			content,
+			excerpt,
+			status,
+			postType: 'page',
+			authorId,
+			parentId,
+			menuOrder,
+			template,
+			commentStatus,
+			postDate,
+			modifiedDate: now
+		}).returning({ id: posts.id });
+
+		const pageId = result[0].id;
+
+		await db.insert(revisions).values({
+			postId: pageId,
+			title,
+			content,
+			excerpt,
+			userId: locals.user!.id,
+			createdAt: now
+		});
+
+		redirect(302, `/sp-admin/pages/${pageId}`);
+	}
+};
