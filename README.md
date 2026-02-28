@@ -28,20 +28,22 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 ## Features
 
 ### Content Management
-- **Posts & Pages** — Create, edit, publish, draft, schedule, trash, and restore content
+- **Posts & Pages** — Create, edit, publish, draft, schedule, trash, and restore content; trash/restore preserves the original status
 - **Block editor** — Gutenberg-style editor with 21 block types (see [Block Editor](#block-editor))
 - **Post revisions** — Every save creates a revision; browse and restore from a diff view
-- **Scheduled publishing** — Set a future publish date; `node-cron` publishes automatically every minute
+- **Scheduled publishing** — Set a future publish date; `node-cron` publishes automatically every minute; "Scheduled" tab in admin
 - **Sticky posts** — Pin posts to the top of archive listings
 - **Excerpts** — Manual or auto-generated post summaries
 - **Slug management** — Auto-derived from title, manually overrideable
 - **Featured images** — Attach media to posts/pages
+- **Password-protected posts** — Set a password on private posts; frontend enforces a password gate with a 24-hour cookie unlock
 
 ### Media Library
 - **Upload** — Drag-and-drop or file-picker upload via multipart POST
 - **Image processing** — `sharp` auto-generates thumbnail (150×150 crop), medium (300px), and large (1024px) sizes
 - **Grid & list views** — Toggle between views in the media library
 - **Attachment details** — Edit alt text, caption, description; view file metadata
+- **Bulk delete** — Select multiple items and delete them along with their generated size variants on disk
 - **Stored at** `static/uploads/YYYY/MM/`
 
 ### Comments
@@ -58,7 +60,9 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **Capability system** — WordPress-faithful `CAPABILITIES` map with a `can(user, cap)` helper
 - **User management** — Create, edit, delete users; assign roles
 - **Profile page** — Edit display name, bio, contact info, password, avatar
+- **Custom avatar upload** — Upload a profile photo (sharp-processed to 96×96 WebP); falls back to Gravatar
 - **Registration** — Configurable open/closed registration via settings
+- **Two-factor authentication** — TOTP-based 2FA via authenticator app; QR code setup, backup codes, enable/disable from profile
 
 ### Taxonomy
 - **Categories** — Hierarchical (parent/child), with slugs and descriptions
@@ -67,7 +71,7 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 
 ### Navigation & Widgets
 - **Menu builder** — Create menus, add pages/posts/custom links/categories, reorder, assign to theme locations
-- **Widget areas** — Sidebar, Footer columns; available widget list
+- **Widget areas** — Sidebar, Footer columns; drag-and-drop reorder with persisted order
 - **Built-in widgets** — Search, Recent Posts, Recent Comments, Archives (with month links), Categories, Tag Cloud, Text, Custom HTML
 
 ### Authentication
@@ -75,6 +79,16 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **Login / Register / Forgot Password** — Full auth flow at `/sp-login`, `/sp-register`, `/sp-forgot-password`
 - **Password reset email** — Sends via SMTP (or ethereal.email in dev for preview)
 - **Secure password hashing** — bcryptjs
+- **Two-factor authentication** — TOTP via authenticator app with backup codes
+
+### Permalinks
+- **Six URL structures** — Plain (`?p=123`), Day+name, Month+name, Numeric (`/archives/123`), Post name, Custom
+- **Enforced on all listing pages** — Home, category, tag, author, search, date archives all generate correct URLs
+- **Canonical redirects** — `/[slug]` issues 301 → canonical URL when using a date-based structure
+
+### Activity Log
+- **Audit trail** — Every significant admin action (login, post save/publish/trash, media upload, settings changes, plugin activation) is recorded
+- **Admin page** — Filterable, paginated log at `/sp-admin/activity` with color-coded action types
 
 ### Settings
 | Page | Controls |
@@ -168,13 +182,13 @@ The editor supports 21 block types across four categories:
 | Block | Description |
 |---|---|
 | Image | Upload or select from media library; alt text, caption, size, alignment |
-| Gallery | Multi-image grid with column count control |
+| Gallery | Multi-image grid with column count control and full-screen lightbox viewer |
 | Video | URL embed or file reference |
 
 **Layout**
 | Block | Description |
 |---|---|
-| Columns | Two-column layout container |
+| Columns | Two-column layout; each column supports its own set of nested blocks (excluding another Columns block) |
 | Separator | Horizontal rule with style variants |
 | Spacer | Adjustable height whitespace |
 | Table | Rows/columns editor with header toggle |
@@ -196,21 +210,21 @@ All admin routes live under `/sp-admin/`:
 | Route | Description |
 |---|---|
 | `/sp-admin/dashboard` | At-a-glance stats, quick draft, recent activity, welcome panel |
-| `/sp-admin/posts` | Post list with status tabs, search, bulk actions, hover actions |
+| `/sp-admin/posts` | Post list with status tabs (including Scheduled), search, bulk actions, hover actions |
 | `/sp-admin/posts/new` | Block editor for new post |
 | `/sp-admin/posts/[id]` | Block editor for existing post |
 | `/sp-admin/pages` | Same as posts, filtered to pages |
-| `/sp-admin/media` | Grid/list media library, drag-and-drop upload |
+| `/sp-admin/media` | Grid/list media library, drag-and-drop upload, bulk delete |
 | `/sp-admin/media/[id]` | Attachment detail and edit |
 | `/sp-admin/comments` | Comment moderation with status tabs and bulk actions |
 | `/sp-admin/categories` | Split-panel add/edit/delete with hierarchy |
 | `/sp-admin/tags` | Flat taxonomy management |
 | `/sp-admin/menus` | Menu builder with pages/posts/custom links/categories |
-| `/sp-admin/widgets` | Widget area management |
+| `/sp-admin/widgets` | Widget area management with drag-and-drop reordering |
 | `/sp-admin/users` | User list with role filter tabs |
 | `/sp-admin/users/new` | Create new user |
-| `/sp-admin/users/[id]` | Edit user |
-| `/sp-admin/profile` | Current user profile and password |
+| `/sp-admin/users/[id]` | Edit user and upload avatar |
+| `/sp-admin/profile` | Current user profile, password, avatar upload, 2FA setup |
 | `/sp-admin/themes` | Theme grid with activate and details modal |
 | `/sp-admin/plugins` | Plugin list with activate/deactivate (state persisted) |
 | `/sp-admin/settings/general` | General settings |
@@ -219,6 +233,7 @@ All admin routes live under `/sp-admin/`:
 | `/sp-admin/settings/discussion` | Comment and notification settings |
 | `/sp-admin/settings/media` | Image size settings |
 | `/sp-admin/settings/permalinks` | URL structure settings |
+| `/sp-admin/activity` | Admin activity log with filters and pagination |
 | `/sp-admin/tools` | WXR import and export |
 | `/sp-admin/revisions/[id]` | Revision browser and restore |
 
@@ -230,11 +245,15 @@ All admin routes live under `/sp-admin/`:
 |---|---|
 | `/` | Paginated blog home |
 | `/[slug]` | Single post or page with threaded comments |
+| `/[slug]` (password-protected) | Password gate for private posts; unlocked via cookie |
 | `/category/[slug]` | Category archive |
 | `/tag/[slug]` | Tag archive |
 | `/author/[username]` | Author archive with profile |
 | `/search` | Full-text search results |
 | `/[year]/[month]/` | Date archive (e.g. `/2026/02/`) |
+| `/[year]/[month]/[slug]` | Month+name permalink structure |
+| `/[year]/[month]/[day]/[slug]` | Day+name permalink structure |
+| `/archives/[id]` | Numeric permalink structure |
 
 Frontend features: header with primary nav, sidebar with widgets (search, categories, archives), footer, threaded comment form on posts, Gravatar avatars, responsive layout, active theme CSS loaded dynamically.
 
@@ -349,21 +368,11 @@ The core content creation and management flow works end-to-end. The following it
 
 | Feature | Status |
 |---|---|
-| **Password-protected posts** | `status='private'` is stored but the frontend does not enforce a password gate |
-| **Permalink structure enforcement** | Settings page saves the chosen structure but frontend always routes via `/[slug]` |
-| **Columns block nesting** | Columns block renders two columns but does not support nested blocks inside each column |
-| **Gallery lightbox** | Gallery block renders images in a grid but has no lightbox or modal viewer |
-| **User avatar upload** | Profile page shows Gravatar only; no custom avatar upload |
-| **Media bulk delete** | Checkboxes exist in the media library but bulk delete is not wired up |
-| **Scheduled post indicator** | Posts with a future date use `status='future'` internally but the admin UI has no "Scheduled" tab |
-| **Widget drag-and-drop** | Widget areas display correctly but drag-and-drop reordering is not fully persisted |
 | **Akismet / spam filtering** | The Akismet plugin stub exists but makes no real API calls |
 | **Import validation** | WXR import does not validate for duplicate slugs or missing authors |
 
 ### Not Yet Implemented
 
-- **Two-factor authentication**
-- **Activity log** — Admin audit trail
 - **Multisite** — Single-site only
 
 ---
@@ -376,8 +385,10 @@ svelte-press/
 │   ├── lib/
 │   │   ├── components/
 │   │   │   ├── blocks/          # 21 block editor components
+│   │   │   ├── GalleryLightbox.svelte  # Full-screen gallery lightbox
 │   │   │   └── Comment.svelte   # Recursive threaded comment component
 │   │   ├── server/
+│   │   │   ├── activity/        # logActivity() helper + activity_log table
 │   │   │   ├── api/             # REST API auth helpers
 │   │   │   ├── auth/            # Session create/validate/delete
 │   │   │   ├── db/              # Drizzle schema, migrations, seed
@@ -387,10 +398,11 @@ svelte-press/
 │   │   │   ├── plugins/         # Hook system + loader
 │   │   │   ├── scheduler/       # node-cron scheduled publishing
 │   │   │   └── themes/          # Theme loader
-│   │   └── utils.ts             # slugify, formatDate, truncate, etc.
+│   │   └── utils.ts             # slugify, formatDate, truncate, getPermalinkUrl, etc.
 │   ├── params/
 │   │   ├── year.ts              # Route matcher for 4-digit years
-│   │   └── month.ts             # Route matcher for month numbers
+│   │   ├── month.ts             # Route matcher for month numbers (1–12)
+│   │   └── day.ts               # Route matcher for day numbers (1–31)
 │   └── routes/
 │       ├── (admin)/sp-admin/    # All admin routes
 │       ├── (auth)/              # Login, register, forgot password

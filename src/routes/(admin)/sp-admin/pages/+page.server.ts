@@ -1,7 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { posts, users } from '$lib/server/db/schema.js';
+import { posts, users, postMeta } from '$lib/server/db/schema.js';
 import { eq, desc, and, like, count, sql, inArray } from 'drizzle-orm';
 
 const PER_PAGE = 20;
@@ -89,9 +89,23 @@ export const actions: Actions = {
 		if (!ids.length) return fail(400, { error: 'No pages selected.' });
 
 		if (action === 'trash') {
+			const toTrash = db.select({ id: posts.id, status: posts.status }).from(posts).where(inArray(posts.id, ids)).all();
+			for (const p of toTrash) {
+				const existing = db.select().from(postMeta).where(and(eq(postMeta.postId, p.id), eq(postMeta.metaKey, '_trash_status'))).get();
+				if (existing) {
+					await db.update(postMeta).set({ metaValue: p.status }).where(eq(postMeta.id, existing.id));
+				} else {
+					await db.insert(postMeta).values({ postId: p.id, metaKey: '_trash_status', metaValue: p.status });
+				}
+			}
 			await db.update(posts).set({ status: 'trash' }).where(inArray(posts.id, ids));
 		} else if (action === 'restore') {
-			await db.update(posts).set({ status: 'draft' }).where(inArray(posts.id, ids));
+			for (const id of ids) {
+				const meta = db.select().from(postMeta).where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, '_trash_status'))).get();
+				const restoreStatus = (meta?.metaValue as 'publish' | 'draft' | 'pending' | 'private') ?? 'draft';
+				await db.update(posts).set({ status: restoreStatus }).where(eq(posts.id, id));
+				if (meta) await db.delete(postMeta).where(eq(postMeta.id, meta.id));
+			}
 		} else if (action === 'delete') {
 			await db.delete(posts).where(inArray(posts.id, ids));
 		} else if (action === 'publish') {
@@ -107,6 +121,15 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
+		const page = db.select({ id: posts.id, status: posts.status }).from(posts).where(eq(posts.id, id)).get();
+		if (page) {
+			const existing = db.select().from(postMeta).where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, '_trash_status'))).get();
+			if (existing) {
+				await db.update(postMeta).set({ metaValue: page.status }).where(eq(postMeta.id, existing.id));
+			} else {
+				await db.insert(postMeta).values({ postId: id, metaKey: '_trash_status', metaValue: page.status });
+			}
+		}
 		await db.update(posts).set({ status: 'trash' }).where(eq(posts.id, id));
 		return { success: true };
 	},
@@ -115,7 +138,10 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
-		await db.update(posts).set({ status: 'draft' }).where(eq(posts.id, id));
+		const meta = db.select().from(postMeta).where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, '_trash_status'))).get();
+		const restoreStatus = (meta?.metaValue as 'publish' | 'draft' | 'pending' | 'private') ?? 'draft';
+		await db.update(posts).set({ status: restoreStatus }).where(eq(posts.id, id));
+		if (meta) await db.delete(postMeta).where(eq(postMeta.id, meta.id));
 		return { success: true };
 	},
 

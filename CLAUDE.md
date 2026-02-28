@@ -6,7 +6,7 @@ License: MIT — Copyright A to Z Tech Innovations LLC (https://a2ztech.io)
 Feature-complete WordPress clone built with SvelteKit 2 + Svelte 5 + TypeScript.
 Admin routes use `sp-*` prefix (never `wp-*`).
 
-Git repo on `master` — latest commit: `a5398c6`
+Git repo on `master`
 
 ---
 
@@ -265,8 +265,59 @@ Frontend layout uses `var(--theme-*)` CSS custom properties — switching themes
 ## Date Archives
 
 Route: `src/routes/(frontend)/[year=year]/[month=month]/`
-Param matchers in `src/params/year.ts` (4-digit) and `src/params/month.ts` (1-12) prevent conflicts with `[slug]`.
+Param matchers in `src/params/year.ts` (4-digit), `src/params/month.ts` (1-12), and `src/params/day.ts` (1-31) prevent conflicts with `[slug]`.
 Archive months shown in sidebar Archives widget (queried in frontend layout load).
+
+Additional permalink routes:
+- `[year=year]/[month=month]/[slug]/` — month+name structure
+- `[year=year]/[month=month]/[day=day]/[slug]/` — day+name structure
+- `archives/[id]/` — numeric structure
+
+`getPermalinkUrl(post, structure)` in `src/lib/utils.ts` generates canonical URLs. All listing pages call it. The `[slug]/+page.server.ts` issues a 301 redirect to the canonical URL for posts when using a non-postname structure.
+
+---
+
+## Activity Log
+
+`src/lib/server/activity/index.ts` exports `logActivity(opts)`:
+```ts
+logActivity({
+  userId: locals.user?.id,
+  userDisplayName: locals.user?.displayName,
+  action: 'post_published',   // string
+  objectType: 'post',         // 'post' | 'page' | 'media' | 'comment' | 'user' | 'plugin' | 'settings' | ...
+  objectId: id,               // optional
+  objectTitle: title,         // optional
+  details: { status }         // optional JSON
+}).catch(() => {});           // always fire-and-forget
+```
+DB table: `activity_log` with columns `id, userId, userDisplayName, action, objectType, objectId, objectTitle, details, ip, createdAt`.
+Admin page at `/sp-admin/activity` — filterable by action/type, 50 rows per page, color-coded badges.
+
+---
+
+## Trash / Restore Pre-Status Pattern
+
+Before trashing a post or page, save its current status to `post_meta` so restore can return it to the original status (not hardcode `'draft'`):
+
+```ts
+// Trash: save pre-trash status
+const existing = db.select().from(postMeta).where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, '_trash_status'))).get();
+if (existing) {
+  await db.update(postMeta).set({ metaValue: currentStatus }).where(eq(postMeta.id, existing.id));
+} else {
+  await db.insert(postMeta).values({ postId: id, metaKey: '_trash_status', metaValue: currentStatus });
+}
+await db.update(posts).set({ status: 'trash' }).where(eq(posts.id, id));
+
+// Restore: read pre-trash status and delete meta
+const meta = db.select().from(postMeta).where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, '_trash_status'))).get();
+const restoreStatus = (meta?.metaValue as 'publish' | 'draft' | 'pending' | 'private') ?? 'draft';
+await db.update(posts).set({ status: restoreStatus }).where(eq(posts.id, id));
+if (meta) await db.delete(postMeta).where(eq(postMeta.id, meta.id));
+```
+
+Applied in: `posts/+page.server.ts` (bulk + single), `pages/+page.server.ts` (bulk + single).
 
 ---
 
@@ -326,6 +377,7 @@ src/routes/
 │       ├── themes/
 │       ├── plugins/
 │       ├── profile/
+│       ├── activity/           # admin audit log (paginated, filterable)
 │       ├── revisions/[id]/
 │       ├── tools/
 │       └── settings/
@@ -338,8 +390,11 @@ src/routes/
 ├── (frontend)/                 # public theme-aware routes
 │   ├── +layout.svelte          # injects active theme CSS link
 │   ├── +page.svelte            # blog home
-│   ├── [slug]/                 # post or page
-│   ├── [year=year]/[month=month]/  # date archives
+│   ├── [slug]/                 # post or page (+ password gate for private posts)
+│   ├── [year=year]/[month=month]/          # date archives
+│   ├── [year=year]/[month=month]/[slug]/   # month+name permalink structure
+│   ├── [year=year]/[month=month]/[day=day]/[slug]/  # day+name permalink structure
+│   ├── archives/[id]/          # numeric permalink structure
 │   ├── category/[slug]/
 │   ├── tag/[slug]/
 │   ├── author/[username]/
@@ -438,6 +493,8 @@ gravatarUrl(email, size) // async, uses Web Crypto — SERVER SIDE ONLY via util
 initials(name)         // "John Doe" → "JD"
 bytesToHuman(bytes)    // 1024 → "1.0 KB"
 getMediaUrl(path)      // strips static/ prefix for browser URL
+getPermalinkUrl(post, structure) // generates canonical URL based on permalink structure
+// post: { id, slug, postDate }; structure: e.g. '/%postname%/', '/%year%/%monthnum%/%postname%/'
 ```
 
 ---
@@ -479,25 +536,32 @@ Default login: **admin / password** at `http://localhost:5173/sp-login`
 All features are complete and working end-to-end:
 
 - **Auth** — login, register, forgot-password (sends real email via nodemailer/ethereal), session middleware
+- **Two-factor authentication** — TOTP setup via QR code, backup codes, enable/disable from profile; 2FA step on login
 - **Admin layout** — dark sidebar, adminbar, all nav, logout
 - **Dashboard** — stats, quick draft, recent activity, welcome panel
-- **Posts & Pages CRUD** — list, new, edit (with block editor), trash/delete, visibility selector fixed
+- **Posts & Pages CRUD** — list, new, edit (with block editor), trash/restore (preserves pre-trash status), visibility selector
+- **Scheduled posts** — `status='future'`; "Scheduled" tab in admin list; node-cron auto-publishes every minute
 - **Block editor** — 21 block types, toolbar, inserter; contenteditable duplication bug fixed; HTML comment stripping
+- **Columns block** — two-column layout with full nested block support per column (no recursive columns)
 - **Embed block** — oEmbed fetch via `/api/oembed` for YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok
-- **Media library** — grid/list, drag-and-drop upload, attachment detail/edit, sharp resizing
+- **Gallery block** — multi-image grid with full-screen lightbox via event delegation
+- **Password-protected posts** — frontend password gate for `status='private'` posts; 24-hour unlock cookie
+- **Permalink enforcement** — six URL structures fully enforced; `getPermalinkUrl()` on all listing pages; 301 redirects for non-postname structures; routes: `/archives/[id]`, `/[year]/[month]/[slug]`, `/[year]/[month]/[day]/[slug]`
+- **Media library** — grid/list, drag-and-drop upload, attachment detail/edit, sharp resizing, **bulk delete** (disk + DB)
 - **Comments** — moderation table, status tabs, approve/spam/trash bulk actions, threaded display with Reply UI on frontend
 - **Comment notifications** — post author emailed on new comment (fire-and-forget, dev uses ethereal preview)
 - **Categories & Tags** — split-panel add/edit/delete
-- **Users** — list with role tabs, new/edit, role management
+- **Users** — list with role tabs, new/edit, role management, **custom avatar upload** (sharp 96×96 WebP)
 - **Settings** — all 6 settings pages (general, reading, writing, discussion, media, permalinks)
 - **Menus builder** — tab panels for pages/posts/custom links/categories, up/down reorder
-- **Widgets** — areas + available widgets display
+- **Widgets** — areas, available widgets, **drag-and-drop reorder persisted** per area
 - **Themes admin** — card grid, activate, details modal; **frontend actually loads per-theme CSS** (default/minimal/magazine)
 - **Plugins admin** — table, toggle activate/deactivate; **activation state persisted** in options table and respected at load
-- **Profile** — name, bio, contact, password, avatar display
+- **Profile** — name, bio, contact, password, avatar upload, 2FA setup/disable
+- **Activity log** — `activity_log` DB table; `logActivity()` helper called from 16+ server files; `/sp-admin/activity` with filters and pagination
 - **Revisions** — slider, side-by-side diff, restore
 - **Tools** — WXR export and import
-- **Public frontend** — blog home, single post/page, category, tag, author, search, **date archives** (`/[year]/[month]/`)
+- **Public frontend** — blog home, single post/page, category, tag, author, search, date archives (`/[year]/[month]/`), permalink-aware URLs
 - **REST API** — `/api/v1/` for posts, pages, media, comments, users, categories, tags, upload; **all write endpoints auth-guarded**
 
 ---
@@ -509,16 +573,8 @@ All features are complete and working end-to-end:
 
 ## Remaining Incomplete Features
 
-- **Password-protected posts** — `status='private'` stored but frontend has no password gate
-- **Columns block nesting** — Columns block doesn't support nested blocks inside each column
-- **Gallery lightbox** — Gallery renders images in a grid but has no lightbox/modal viewer
-- **User avatar upload** — shows Gravatar only; no custom avatar upload
-- **Permalink structure** — settings saved but frontend always uses `/[slug]`
-- **Media bulk delete** — checkboxes exist in media library but bulk delete not wired
-- **Scheduled post indicator** — `status='future'` stored but admin UI has no "Scheduled" status tab
-- **Widget drag-and-drop persistence** — widget areas render but reordering not fully persisted
-- **Two-factor authentication** — not implemented
-- **Activity log** — admin audit trail not implemented
+- **Akismet / spam filtering** — plugin stub exists but makes no real API calls
+- **Import validation** — WXR import does not check for duplicate slugs or missing authors
 - **Multisite** — single-site only
 
 ---
@@ -537,5 +593,8 @@ All features are complete and working end-to-end:
 10. **No root page**: `src/routes/+page.server.ts` and `src/routes/+page.svelte` must NOT exist — `(frontend)/+page.svelte` owns `/`.
 11. **contenteditable blocks**: Always use the `untrack()` + `localContent` pattern with HTML comment stripping. Never bind `{@html block.content}` directly.
 12. **Slug effect**: Always use `slugManuallyEdited` flag in post/page editors. Never `if (title && !slug)`.
-13. **Date archive routes**: `[year=year]/[month=month]` — matchers in `src/params/` are required to avoid conflicting with `[slug]`.
+13. **Date archive routes**: `[year=year]/[month=month]` — matchers in `src/params/` are required to avoid conflicting with `[slug]`. Also `[day=day]` for day+name structure.
 14. **Theme CSS**: Served from filesystem via `src/routes/themes/[theme]/style.css/+server.ts` — not from `static/`.
+15. **Trash/restore pattern**: Always save pre-trash status to `post_meta._trash_status` before trashing. Restore reads and deletes this meta. Never hardcode `status: 'draft'` on restore.
+16. **Permalink URLs**: All listing pages (home, category, tag, author, search, date archive) must call `getPermalinkUrl(post, data.permalinkStructure)` — never hardcode `/${post.slug}`.
+17. **Activity logging**: All significant admin mutations must call `logActivity(...).catch(() => {})` — fire-and-forget, never throw.
