@@ -2,11 +2,13 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { media, users } from '$lib/server/db/schema.js';
-import { eq, desc, like, count, and, sql } from 'drizzle-orm';
+import { eq, desc, like, count, and, sql, inArray } from 'drizzle-orm';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 import { join } from 'path';
 import sharp from 'sharp';
 import { nanoid } from 'nanoid';
+import { can } from '$lib/server/permissions/index.js';
 
 const PER_PAGE = 40;
 
@@ -154,5 +156,57 @@ export const actions: Actions = {
 		}
 
 		return { success: true, uploaded };
+	},
+
+	bulkDelete: async ({ request, locals }) => {
+		if (!locals.user || !can(locals.user.role, 'delete_posts')) {
+			return fail(403, { error: 'Forbidden' });
+		}
+
+		const data = await request.formData();
+		const ids = data.getAll('mediaIds').map(Number).filter(Boolean);
+
+		if (!ids.length) {
+			return fail(400, { error: 'No items selected' });
+		}
+
+		// Fetch media rows so we can delete files from disk
+		const rows = db
+			.select({ id: media.id, path: media.path, sizes: media.sizes })
+			.from(media)
+			.where(inArray(media.id, ids))
+			.all();
+
+		// Delete files from disk (main file + all size variants)
+		for (const row of rows) {
+			const pathsToDelete: string[] = [];
+
+			// Main file — path stored as "uploads/YYYY/MM/file.jpg" (no leading slash)
+			if (row.path) {
+				pathsToDelete.push(join(process.cwd(), 'static', row.path));
+			}
+
+			// Size variants — stored the same way in the sizes JSON object
+			if (row.sizes && typeof row.sizes === 'object') {
+				for (const sizePath of Object.values(row.sizes as Record<string, string>)) {
+					if (sizePath) {
+						pathsToDelete.push(join(process.cwd(), 'static', sizePath));
+					}
+				}
+			}
+
+			for (const filePath of pathsToDelete) {
+				try {
+					await unlink(filePath);
+				} catch {
+					// File may already be missing — ignore
+				}
+			}
+		}
+
+		// Delete DB rows
+		await db.delete(media).where(inArray(media.id, ids));
+
+		return { deleted: ids.length };
 	}
 };

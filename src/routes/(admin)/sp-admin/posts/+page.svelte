@@ -54,6 +54,7 @@
 		{ key: 'publish', label: 'Published' },
 		{ key: 'draft', label: 'Drafts' },
 		{ key: 'pending', label: 'Pending Review' },
+		{ key: 'future', label: 'Scheduled' },
 		{ key: 'private', label: 'Private' },
 		{ key: 'trash', label: 'Trash' }
 	];
@@ -202,12 +203,18 @@
 						</a>
 					</td>
 					<td>
-						<span style="font-size:12px; text-transform:capitalize; color:var(--sp-text-muted);">{post.status}</span>
+						{#if post.status === 'future'}
+							<span style="font-size:12px; font-weight:600; color:var(--sp-warning);">Scheduled</span>
+						{:else}
+							<span style="font-size:12px; text-transform:capitalize; color:var(--sp-text-muted);">{post.status}</span>
+						{/if}
 					</td>
 					<td>
 						<span style="font-size:12px; color:var(--sp-text-muted);">
 							{#if post.status === 'publish'}
 								Published<br />{formatDate(post.postDate)}
+							{:else if post.status === 'future'}
+								Scheduled for<br />{formatDate(post.postDate)}
 							{:else}
 								Last Modified<br />{formatDate(post.modifiedDate)}
 							{/if}

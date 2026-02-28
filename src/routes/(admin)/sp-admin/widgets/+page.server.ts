@@ -2,7 +2,8 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { widgets } from '$lib/server/db/schema.js';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { can } from '$lib/server/permissions/index.js';
 
 const WIDGET_AREAS = [
 	{ id: 'sidebar', name: 'Primary Sidebar' },
@@ -12,8 +13,12 @@ const WIDGET_AREAS = [
 
 const AVAILABLE_WIDGETS = [
 	{ type: 'search', name: 'Search', description: 'A search form for your site.' },
-	{ type: 'recent-posts', name: 'Recent Posts', description: 'Your site\'s most recent posts.' },
-	{ type: 'recent-comments', name: 'Recent Comments', description: 'Your site\'s most recent comments.' },
+	{ type: 'recent-posts', name: 'Recent Posts', description: "Your site's most recent posts." },
+	{
+		type: 'recent-comments',
+		name: 'Recent Comments',
+		description: "Your site's most recent comments."
+	},
 	{ type: 'archives', name: 'Archives', description: 'A monthly archive of your posts.' },
 	{ type: 'categories', name: 'Categories', description: 'A list or dropdown of categories.' },
 	{ type: 'tag-cloud', name: 'Tag Cloud', description: 'A cloud of your most used tags.' },
@@ -33,39 +38,11 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	save: async ({ request }) => {
-		const data = await request.formData();
-		const area = String(data.get('area') ?? '');
-		const widgetsRaw = String(data.get('widgets') ?? '[]');
-
-		if (!area) return fail(400, { error: 'Missing area.' });
-
-		let widgetData: Array<{ id?: number; type: string; settings: Record<string, unknown>; order: number }> = [];
-		try {
-			widgetData = JSON.parse(widgetsRaw);
-		} catch {
-			return fail(400, { error: 'Invalid widgets data.' });
+	// Add a widget to an area
+	addWidget: async ({ request, locals }) => {
+		if (!locals.user || !can(locals.user.role, 'manage_options')) {
+			return fail(403, { error: 'Forbidden.' });
 		}
-
-		// Delete existing widgets for area
-		await db.delete(widgets).where(eq(widgets.area, area));
-
-		// Insert new
-		if (widgetData.length > 0) {
-			await db.insert(widgets).values(
-				widgetData.map((w, i) => ({
-					area,
-					widgetType: w.type,
-					settings: w.settings ?? {},
-					order: w.order ?? i
-				}))
-			);
-		}
-
-		return { success: true };
-	},
-
-	addWidget: async ({ request }) => {
 		const data = await request.formData();
 		const area = String(data.get('area') ?? '');
 		const widgetType = String(data.get('widgetType') ?? '');
@@ -85,11 +62,53 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	removeWidget: async ({ request }) => {
+	// Remove a single widget by id
+	removeWidget: async ({ request, locals }) => {
+		if (!locals.user || !can(locals.user.role, 'manage_options')) {
+			return fail(403, { error: 'Forbidden.' });
+		}
 		const data = await request.formData();
-		const id = Number(data.get('id'));
-		if (!id) return fail(400, { error: 'Missing id.' });
+		const id = Number(data.get('widgetId'));
+		if (!id) return fail(400, { error: 'Missing widgetId.' });
 		await db.delete(widgets).where(eq(widgets.id, id));
+		return { success: true };
+	},
+
+	// Save widget settings (title, content, count, etc.)
+	saveWidget: async ({ request, locals }) => {
+		if (!locals.user || !can(locals.user.role, 'manage_options')) {
+			return fail(403, { error: 'Forbidden.' });
+		}
+		const data = await request.formData();
+		const id = Number(data.get('widgetId'));
+		const settingsRaw = String(data.get('settings') ?? '{}');
+		if (!id) return fail(400, { error: 'Missing widgetId.' });
+
+		let settings: Record<string, unknown> = {};
+		try {
+			settings = JSON.parse(settingsRaw);
+		} catch {
+			return fail(400, { error: 'Invalid settings JSON.' });
+		}
+
+		await db.update(widgets).set({ settings }).where(eq(widgets.id, id));
+		return { success: true };
+	},
+
+	// Reorder widgets in one area after a DnD drop or up/down click
+	reorderWidgets: async ({ request, locals }) => {
+		if (!locals.user || !can(locals.user.role, 'manage_options')) {
+			return fail(403, { error: 'Forbidden.' });
+		}
+		const data = await request.formData();
+		const orderedIds = data
+			.getAll('ids')
+			.map(Number)
+			.filter((n) => n > 0);
+
+		for (let i = 0; i < orderedIds.length; i++) {
+			await db.update(widgets).set({ order: i + 1 }).where(eq(widgets.id, orderedIds[i]));
+		}
 		return { success: true };
 	}
 };

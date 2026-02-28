@@ -1,9 +1,13 @@
 import { fail, error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { users } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { users, userMeta } from '$lib/server/db/schema.js';
+import { eq, and } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
+import { can } from '$lib/server/permissions/index.js';
+import sharp from 'sharp';
+import { writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const id = Number(params.id);
@@ -23,7 +27,12 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	if (!user) error(404, 'User not found');
 
-	return { user };
+	const avatarMeta = db.select().from(userMeta).where(
+		and(eq(userMeta.userId, id), eq(userMeta.metaKey, 'avatar_url'))
+	).get();
+	const customAvatarUrl = avatarMeta?.metaValue ?? null;
+
+	return { user, customAvatarUrl };
 };
 
 export const actions: Actions = {
@@ -69,5 +78,47 @@ export const actions: Actions = {
 		await db.update(users).set(updateData as typeof users.$inferInsert).where(eq(users.id, id));
 
 		return { success: true };
+	},
+
+	uploadAvatar: async ({ request, params, locals }) => {
+		if (!locals.user) return fail(401, { avatarError: 'Not authenticated.' });
+		if (!can(locals.user.role, 'manage_users')) return fail(403, { avatarError: 'Insufficient permissions.' });
+
+		const userId = Number(params.id);
+		if (!userId) return fail(400, { avatarError: 'Invalid user ID.' });
+
+		const data = await request.formData();
+		const file = data.get('avatar') as File;
+
+		if (!file || !file.size) return fail(400, { avatarError: 'No file selected.' });
+		if (!file.type.startsWith('image/')) return fail(400, { avatarError: 'Must be an image file.' });
+		if (file.size > 2 * 1024 * 1024) return fail(400, { avatarError: 'File must be under 2MB.' });
+
+		const bytes = await file.arrayBuffer();
+		const buffer = Buffer.from(bytes);
+
+		const absDir = join('static', 'uploads', 'avatars');
+		mkdirSync(absDir, { recursive: true });
+
+		const filename = `${userId}.webp`;
+		const absPath = join(absDir, filename);
+		const avatarUrl = `/uploads/avatars/${filename}`;
+
+		await sharp(buffer)
+			.resize(96, 96, { fit: 'cover' })
+			.webp({ quality: 85 })
+			.toFile(absPath);
+
+		const existing = db.select().from(userMeta).where(
+			and(eq(userMeta.userId, userId), eq(userMeta.metaKey, 'avatar_url'))
+		).get();
+
+		if (existing) {
+			await db.update(userMeta).set({ metaValue: avatarUrl }).where(eq(userMeta.id, existing.id));
+		} else {
+			await db.insert(userMeta).values({ userId, metaKey: 'avatar_url', metaValue: avatarUrl });
+		}
+
+		return { avatarSuccess: true };
 	}
 };

@@ -3,43 +3,66 @@
 	import { formatDate } from '$lib/utils.js';
 	import { enhance } from '$app/forms';
 	import Comment from '$lib/components/Comment.svelte';
+	import GalleryLightbox from '$lib/components/GalleryLightbox.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	// Block renderer
-	function renderBlock(block: { type: string; content: string; attrs: Record<string, unknown> }): string {
+	function renderBlock(block: { id?: string; type: string; content: string; attrs: Record<string, unknown> }): string {
 		switch (block.type) {
 			case 'paragraph':
-				return `<p>${block.content}</p>`;
+				return '<p>' + block.content + '</p>';
 			case 'heading': {
 				const level = Number(block.attrs.level) || 2;
-				return `<h${level}>${block.content}</h${level}>`;
+				return '<h' + level + '>' + block.content + '</h' + level + '>';
 			}
 			case 'image':
-				return `<figure><img src="${block.attrs.src}" alt="${block.attrs.alt || ''}" /></figure>`;
+				return '<figure><img src="' + block.attrs.src + '" alt="' + (block.attrs.alt || '') + '" /></figure>';
+			case 'gallery': {
+				const imgs = Array.isArray(block.attrs.images) ? block.attrs.images : [];
+				if (imgs.length === 0) return '';
+				const blockId = block.id ?? '';
+				const thumbs = (imgs as Array<{ src: string; alt?: string; caption?: string }>)
+					.map((img, idx) => {
+						const caption = img.caption
+							? '<span class="sp-gallery-grid-caption">' + img.caption + '</span>'
+							: '';
+						return (
+							'<button type="button" class="sp-gallery-grid-btn"' +
+							' data-sp-gallery-id="' + blockId + '"' +
+							' data-sp-gallery-index="' + idx + '"' +
+							' aria-label="View image ' + (idx + 1) + ' of ' + imgs.length + '">' +
+							'<img src="' + img.src + '" alt="' + (img.alt ?? '') + '" class="sp-gallery-grid-img" loading="lazy" />' +
+							caption +
+							'</button>'
+						);
+					})
+					.join('');
+				return '<div class="sp-gallery-grid" data-sp-gallery="' + blockId + '">' + thumbs + '</div>';
+			}
 			case 'quote':
-				return `<blockquote>${block.content}</blockquote>`;
+				return '<blockquote>' + block.content + '</blockquote>';
 			case 'list':
-				return `<${block.attrs.ordered ? 'ol' : 'ul'}>${block.content}</${block.attrs.ordered ? 'ol' : 'ul'}>`;
+				return '<' + (block.attrs.ordered ? 'ol' : 'ul') + '>' + block.content + '</' + (block.attrs.ordered ? 'ol' : 'ul') + '>';
 			case 'separator':
 				return '<hr />';
 			case 'code':
-				return `<pre><code>${block.content}</code></pre>`;
+				return '<pre><code>' + block.content + '</code></pre>';
 			case 'html':
 				return block.content;
 			case 'embed': {
 				const embedHtml = String(block.attrs.embedHtml ?? '');
 				const embedUrl = String(block.attrs.url ?? '');
 				if (embedHtml) {
-					return `<div class="wp-embed-block">${embedHtml}</div>`;
+					return '<div class="wp-embed-block">' + embedHtml + '</div>';
 				}
 				if (embedUrl) {
-					return `<div class="wp-embed-block"><a href="${embedUrl}" target="_blank" rel="noopener noreferrer">${embedUrl}</a></div>`;
+					return '<div class="wp-embed-block"><a href="' + embedUrl + '" target="_blank" rel="noopener noreferrer">' + embedUrl + '</a></div>';
 				}
 				return '';
 			}
 			default:
-				return block.content ? `<p>${block.content}</p>` : '';
+				return block.content ? '<p>' + block.content + '</p>' : '';
 		}
 	}
 
@@ -47,7 +70,7 @@
 		if (!Array.isArray(blocks)) return '';
 		return blocks
 			.map((b) => {
-				const block = b as { type: string; content: string; attrs: Record<string, unknown> };
+				const block = b as { id?: string; type: string; content: string; attrs: Record<string, unknown> };
 				return renderBlock(block);
 			})
 			.join('\n');
@@ -55,6 +78,15 @@
 
 	let renderedContent = $derived(renderBlocks(data.post.content));
 	let isPost = $derived(data.post.postType === 'post');
+
+	// Collect gallery blocks so GalleryLightbox can access image data
+	let galleryBlocks = $derived(
+		Array.isArray(data.post.content)
+			? (data.post.content as Array<{ id: string; type: string; attrs: Record<string, unknown> }>).filter(
+					(b) => b.type === 'gallery'
+				)
+			: []
+	);
 
 	let commentName = $state('');
 	let commentEmail = $state('');
@@ -162,6 +194,11 @@
 		</div>
 	{/if}
 </article>
+
+<!-- Lightbox for gallery blocks — mounts outside article to avoid z-index issues -->
+{#if galleryBlocks.length > 0}
+	<GalleryLightbox galleries={galleryBlocks} />
+{/if}
 
 {#if isPost}
 	<section class="fp-comments" id="comments">

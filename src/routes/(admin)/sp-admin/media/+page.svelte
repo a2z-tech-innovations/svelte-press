@@ -3,34 +3,9 @@
 	import { page } from '$app/state';
 	import { bytesToHuman, getMediaUrl, formatDate } from '$lib/utils.js';
 	import { goto } from '$app/navigation';
+	import type { PageData, ActionData } from './$types.js';
 
-	let { data, form } = $props<{
-		data: {
-			items: Array<{
-				id: number;
-				filename: string;
-				originalName: string;
-				mimeType: string;
-				size: number;
-				width: number | null;
-				height: number | null;
-				alt: string;
-				caption: string;
-				path: string;
-				sizes: Record<string, string>;
-				uploadedAt: Date;
-				uploaderName: string | null;
-			}>;
-			total: number;
-			page: number;
-			perPage: number;
-			search: string;
-			mimeFilter: string;
-			view: string;
-			showUpload: boolean;
-		};
-		form?: { success?: boolean; error?: string; uploaded?: number[] } | null;
-	}>();
+	let { data, form }: { data: PageData; form?: ActionData } = $props();
 
 	let view = $state(data.view);
 	let search = $state(data.search);
@@ -41,7 +16,20 @@
 	let uploading = $state(false);
 	let fileInput: HTMLInputElement;
 
+	// Bulk selection state
+	let selectedIds = $state<Set<number>>(new Set());
+	let bulkDeleting = $state(false);
+
 	const totalPages = $derived(Math.ceil(data.total / data.perPage));
+	const allSelected = $derived(data.items.length > 0 && data.items.every((item) => selectedIds.has(item.id)));
+	const someSelected = $derived(selectedIds.size > 0);
+
+	// Clear selection when page data changes (after delete / navigation)
+	$effect(() => {
+		// Track data.items to reset on page change
+		void data.items;
+		selectedIds = new Set();
+	});
 
 	function buildUrl(params: Record<string, string | number>) {
 		const u = new URL(page.url);
@@ -66,6 +54,25 @@
 		if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
 		if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
 		return '📁';
+	}
+
+	function toggleItem(id: number) {
+		const next = new Set(selectedIds);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selectedIds = next;
+	}
+
+	function toggleAll() {
+		if (allSelected) {
+			selectedIds = new Set();
+		} else {
+			selectedIds = new Set(data.items.map((i) => i.id));
+		}
+	}
+
+	function clearSelection() {
+		selectedIds = new Set();
 	}
 
 	function handleDrop(e: DragEvent) {
@@ -108,6 +115,9 @@
 {/if}
 {#if form?.success}
 	<div class="sp-notice sp-notice-success">Upload successful!</div>
+{/if}
+{#if form?.deleted}
+	<div class="sp-notice sp-notice-success">{form.deleted} item{form.deleted === 1 ? '' : 's'} permanently deleted.</div>
 {/if}
 
 <!-- Upload Zone -->
@@ -188,6 +198,43 @@
 	</form>
 </div>
 
+<!-- Bulk action bar -->
+{#if someSelected}
+	<form
+		method="POST"
+		action="?/bulkDelete"
+		use:enhance={() => {
+			bulkDeleting = true;
+			return async ({ update }) => {
+				await update();
+				bulkDeleting = false;
+			};
+		}}
+	>
+		{#each [...selectedIds] as id}
+			<input type="hidden" name="mediaIds" value={id} />
+		{/each}
+		<div class="sp-notice sp-notice-warning" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+			<span style="font-weight:600;">{selectedIds.size} item{selectedIds.size === 1 ? '' : 's'} selected</span>
+			<button
+				type="submit"
+				class="sp-btn sp-btn-danger sp-btn-sm"
+				disabled={bulkDeleting}
+				onclick={(e) => {
+					if (!confirm(`Permanently delete ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}? This cannot be undone.`)) {
+						e.preventDefault();
+					}
+				}}
+			>
+				{bulkDeleting ? 'Deleting…' : 'Delete Permanently'}
+			</button>
+			<button type="button" class="sp-btn sp-btn-secondary sp-btn-sm" onclick={clearSelection}>
+				Cancel
+			</button>
+		</div>
+	</form>
+{/if}
+
 <div style="display:flex; gap:20px; align-items:flex-start;">
 	<!-- Main content -->
 	<div style="flex:1; min-width:0;">
@@ -197,22 +244,55 @@
 				<p>No media found. <button type="button" class="sp-btn-link" onclick={() => (showUpload = true)}>Upload some files</button>.</p>
 			</div>
 		{:else if view === 'grid'}
+			<!-- Select all for grid view -->
+			<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+				<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--sp-text-muted);">
+					<input
+						type="checkbox"
+						checked={allSelected}
+						indeterminate={someSelected && !allSelected}
+						onchange={toggleAll}
+					/>
+					Select all
+				</label>
+			</div>
 			<div class="sp-media-grid">
 				{#each data.items as item}
 					{@const thumb = thumbUrl(item)}
 					<div
 						class="sp-media-thumb"
 						class:selected={selectedItem?.id === item.id}
-						onclick={() => selectedItem = selectedItem?.id === item.id ? null : item}
 						title={item.originalName}
+						style="position:relative;"
 					>
-						{#if thumb}
-							<img src={thumb} alt={item.alt ?? item.originalName} loading="lazy" />
-						{:else}
-							<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:36px;">
-								{mimeIcon(item.mimeType)}
-							</div>
-						{/if}
+						<!-- Checkbox overlay -->
+						<label
+							style="position:absolute;top:6px;left:6px;z-index:2;cursor:pointer;"
+							onclick={(e) => e.stopPropagation()}
+						>
+							<input
+								type="checkbox"
+								checked={selectedIds.has(item.id)}
+								onchange={() => toggleItem(item.id)}
+								style="width:16px;height:16px;cursor:pointer;"
+							/>
+						</label>
+						<!-- Clickable area for details sidebar -->
+						<div
+							style="width:100%;height:100%;"
+							onclick={() => { selectedItem = selectedItem?.id === item.id ? null : item; }}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { selectedItem = selectedItem?.id === item.id ? null : item; } }}
+						>
+							{#if thumb}
+								<img src={thumb} alt={item.alt ?? item.originalName} loading="lazy" />
+							{:else}
+								<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:36px;">
+									{mimeIcon(item.mimeType)}
+								</div>
+							{/if}
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -221,6 +301,15 @@
 				<table class="sp-table">
 					<thead>
 						<tr>
+							<th style="width:36px;">
+								<input
+									type="checkbox"
+									checked={allSelected}
+									indeterminate={someSelected && !allSelected}
+									onchange={toggleAll}
+									title="Select all"
+								/>
+							</th>
 							<th style="width:60px">File</th>
 							<th>Name</th>
 							<th>Type</th>
@@ -232,7 +321,18 @@
 					<tbody>
 						{#each data.items as item}
 							{@const thumb = thumbUrl(item)}
-							<tr onclick={() => selectedItem = selectedItem?.id === item.id ? null : item} style="cursor:pointer;" class:active={selectedItem?.id === item.id}>
+							<tr
+								onclick={() => { selectedItem = selectedItem?.id === item.id ? null : item; }}
+								style="cursor:pointer;"
+								class:active={selectedItem?.id === item.id}
+							>
+								<td onclick={(e) => e.stopPropagation()}>
+									<input
+										type="checkbox"
+										checked={selectedIds.has(item.id)}
+										onchange={() => toggleItem(item.id)}
+									/>
+								</td>
 								<td>
 									{#if thumb}
 										<img src={thumb} alt={item.originalName} style="width:50px;height:50px;object-fit:cover;border-radius:3px;" />

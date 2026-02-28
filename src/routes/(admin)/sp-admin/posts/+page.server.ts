@@ -35,7 +35,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		.groupBy(posts.status)
 		.all();
 
-	const statusCounts: Record<string, number> = { all: 0, publish: 0, draft: 0, pending: 0, private: 0, trash: 0 };
+	const statusCounts: Record<string, number> = { all: 0, publish: 0, draft: 0, pending: 0, future: 0, private: 0, trash: 0 };
 	for (const row of allCounts) {
 		statusCounts[row.status] = Number(row.cnt);
 		if (row.status !== 'trash') {
