@@ -85,9 +85,7 @@
 						>Update</button>
 					{/if}
 				{:else}
-					<form method="POST" action="?/restore" use:enhance style="display:inline">
-						<button type="submit" class="sp-btn sp-btn-secondary sp-btn-sm">Restore</button>
-					</form>
+					<button type="submit" form="sp-restore-form" class="sp-btn sp-btn-secondary sp-btn-sm">Restore</button>
 				{/if}
 				<button type="button" class="sp-btn sp-btn-secondary sp-btn-sm" onclick={() => (sidebarOpen = !sidebarOpen)}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="10" y1="2" x2="10" y2="14" stroke="currentColor" stroke-width="1.2"/></svg>
@@ -156,9 +154,7 @@
 									{/if}
 									{#if data.post.status !== 'trash'}
 										<div style="margin-top:12px;">
-											<form method="POST" action="?/trash" use:enhance style="display:inline">
-												<button type="submit" class="sp-btn-link" style="color:var(--sp-danger); font-size:12px;" onclick={(e) => { if (!confirm('Move to trash?')) e.preventDefault(); }}>Move to Trash</button>
-											</form>
+											<button type="submit" form="sp-trash-form" class="sp-btn-link" style="color:var(--sp-danger); font-size:12px;" onclick={(e) => { if (!confirm('Move to trash?')) e.preventDefault(); }}>Move to Trash</button>
 										</div>
 									{/if}
 								</div>
@@ -247,3 +243,6 @@
 		</div>
 	</div>
 </form>
+
+<form id="sp-trash-form" method="POST" action="?/trash" use:enhance></form>
+<form id="sp-restore-form" method="POST" action="?/restore" use:enhance></form>

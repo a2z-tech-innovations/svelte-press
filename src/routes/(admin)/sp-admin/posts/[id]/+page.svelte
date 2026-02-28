@@ -113,9 +113,7 @@
 						</button>
 					{/if}
 				{:else}
-					<form method="POST" action="?/restore" use:enhance style="display:inline">
-						<button type="submit" class="sp-btn sp-btn-secondary sp-btn-sm">Restore</button>
-					</form>
+					<button type="submit" form="sp-restore-form" class="sp-btn sp-btn-secondary sp-btn-sm">Restore</button>
 				{/if}
 				<button
 					type="button"
@@ -209,9 +207,7 @@
 									{/if}
 									{#if data.post.status !== 'trash'}
 										<div style="margin-top:12px;">
-											<form method="POST" action="?/trash" use:enhance style="display:inline">
-												<button type="submit" class="sp-btn-link" style="color:var(--sp-danger); font-size:12px;" onclick={(e) => { if (!confirm('Move to trash?')) e.preventDefault(); }}>Move to Trash</button>
-											</form>
+											<button type="submit" form="sp-trash-form" class="sp-btn-link" style="color:var(--sp-danger); font-size:12px;" onclick={(e) => { if (!confirm('Move to trash?')) e.preventDefault(); }}>Move to Trash</button>
 										</div>
 									{/if}
 								</div>
@@ -357,3 +353,6 @@
 		</div>
 	</div>
 </form>
+
+<form id="sp-trash-form" method="POST" action="?/trash" use:enhance></form>
+<form id="sp-restore-form" method="POST" action="?/restore" use:enhance></form>
