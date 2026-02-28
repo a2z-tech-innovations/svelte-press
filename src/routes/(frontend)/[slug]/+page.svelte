@@ -2,6 +2,7 @@
 	import type { PageData, ActionData } from './$types.js';
 	import { formatDate } from '$lib/utils.js';
 	import { enhance } from '$app/forms';
+	import Comment from '$lib/components/Comment.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -48,6 +49,8 @@
 	let commentEmail = $state('');
 	let commentUrl = $state('');
 	let commentContent = $state('');
+	let replyToId = $state<number | null>(null);
+	let replyToName = $state<string | null>(null);
 
 	$effect(() => {
 		if (form?.success) {
@@ -55,8 +58,28 @@
 			commentEmail = '';
 			commentUrl = '';
 			commentContent = '';
+			replyToId = null;
+			replyToName = null;
 		}
 	});
+
+	function handleReply(id: number, name: string) {
+		replyToId = id;
+		replyToName = name;
+		// Scroll to the comment form
+		const el = document.getElementById('comment-form');
+		if (el) {
+			el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	}
+
+	function cancelReply() {
+		replyToId = null;
+		replyToName = null;
+	}
+
+	// Use commentTree if available, fall back gracefully
+	let commentTree = $derived(data.commentTree ?? []);
 </script>
 
 <svelte:head>
@@ -140,43 +163,26 @@
 			{/if}
 		</h2>
 
-		{#if data.comments.length > 0}
-			<ol class="fp-comment-list">
-				{#each data.comments as comment}
-					<li class="fp-comment" id="comment-{comment.id}">
-						<div class="fp-comment-avatar">
-							<img
-								src={comment.avatarUrl}
-								alt={comment.authorName}
-								width="48"
-								height="48"
-							/>
-						</div>
-						<div class="fp-comment-body">
-							<div class="fp-comment-meta">
-								{#if comment.authorUrl}
-									<a href={comment.authorUrl} class="fp-comment-author" rel="nofollow ugc" target="_blank">
-										{comment.authorName}
-									</a>
-								{:else}
-									<span class="fp-comment-author">{comment.authorName}</span>
-								{/if}
-								<time class="fp-comment-date" datetime={comment.date?.toISOString() ?? ''}>
-									{formatDate(comment.date)}
-								</time>
-							</div>
-							<div class="fp-comment-content">
-								<p>{comment.content}</p>
-							</div>
-						</div>
-					</li>
+		{#if commentTree.length > 0}
+			<div class="fp-comment-list">
+				{#each commentTree as comment}
+					<Comment {comment} depth={0} onreply={handleReply} />
 				{/each}
-			</ol>
+			</div>
 		{/if}
 
 		{#if data.post.commentStatus === 'open'}
-			<div class="fp-comment-form-wrap">
-				<h3 class="fp-comment-form-title">Leave a Comment</h3>
+			<div class="fp-comment-form-wrap" id="comment-form">
+				<h3 class="fp-comment-form-title">
+					{replyToId ? `Reply to ${replyToName}` : 'Leave a Comment'}
+				</h3>
+
+				{#if replyToId}
+					<div class="fp-reply-indicator">
+						Replying to <strong>{replyToName}</strong> —
+						<button type="button" class="fp-cancel-reply" onclick={cancelReply}>Cancel</button>
+					</div>
+				{/if}
 
 				{#if form?.success}
 					<div class="fp-notice fp-notice--success">
@@ -192,6 +198,7 @@
 					class="fp-comment-form"
 					use:enhance
 				>
+					<input type="hidden" name="parentId" value={replyToId ?? ''} />
 					<div class="fp-form-row">
 						<div class="fp-form-field">
 							<label for="comment-name" class="fp-form-label">Name <span aria-hidden="true">*</span></label>
@@ -479,50 +486,8 @@
 	}
 
 	.fp-comment-list {
-		list-style: none;
 		padding: 0;
 		margin-bottom: 2rem;
-	}
-
-	.fp-comment {
-		display: flex;
-		gap: 1rem;
-		padding: 1.25rem 0;
-		border-bottom: 1px solid #e8e8e8;
-	}
-
-	.fp-comment-avatar img {
-		border-radius: 50%;
-		display: block;
-	}
-
-	.fp-comment-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.fp-comment-author {
-		font-weight: 600;
-		font-size: 0.9rem;
-		color: #1d2327;
-		text-decoration: none;
-	}
-
-	.fp-comment-author:hover {
-		color: #2271b1;
-	}
-
-	.fp-comment-date {
-		font-size: 0.8rem;
-		color: #646970;
-	}
-
-	.fp-comment-content p {
-		font-size: 0.9375rem;
-		line-height: 1.7;
-		color: #1d2327;
 	}
 
 	.fp-comments-closed {
@@ -534,6 +499,31 @@
 	/* ── Comment form ── */
 	.fp-comment-form-wrap {
 		margin-top: 2rem;
+	}
+
+	.fp-reply-indicator {
+		background: #f0f0f1;
+		border-left: 3px solid #2271b1;
+		padding: 8px 12px;
+		font-size: 0.8125rem;
+		margin-bottom: 12px;
+		border-radius: 0 4px 4px 0;
+		color: #3c434a;
+	}
+
+	.fp-cancel-reply {
+		background: none;
+		border: none;
+		padding: 0;
+		color: #2271b1;
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-family: inherit;
+		text-decoration: underline;
+	}
+
+	.fp-cancel-reply:hover {
+		color: #d63638;
 	}
 
 	.fp-comment-form-title {

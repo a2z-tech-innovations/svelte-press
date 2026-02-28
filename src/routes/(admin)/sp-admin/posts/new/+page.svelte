@@ -11,6 +11,7 @@
 	let slug = $state('');
 	let excerpt = $state('');
 	let status = $state<'draft' | 'publish' | 'private' | 'pending'>('draft');
+	let visibility = $state<'public' | 'private' | 'password'>('public');
 	let authorId = $state(data.allUsers[0]?.id ?? 1);
 	let sticky = $state(false);
 	let commentStatus = $state<'open' | 'closed'>('open');
@@ -22,7 +23,6 @@
 	let tagInput = $state('');
 	let selectedTagIds = $state<Set<number>>(new Set());
 	let saving = $state(false);
-	let publishStatus = $state<'draft' | 'publish'>('draft');
 
 	let slugManuallyEdited = $state(false);
 
@@ -81,7 +81,7 @@
 					type="submit"
 					class="sp-btn sp-btn-secondary sp-btn-sm"
 					disabled={saving}
-					onclick={() => { status = 'draft'; }}
+					onclick={() => { status = visibility === 'private' ? 'private' : 'draft'; }}
 				>
 					{saving && status === 'draft' ? 'Saving…' : 'Save Draft'}
 				</button>
@@ -89,7 +89,7 @@
 					type="submit"
 					class="sp-btn sp-btn-primary sp-btn-sm"
 					disabled={saving}
-					onclick={() => { status = 'publish'; }}
+					onclick={() => { status = visibility === 'private' ? 'private' : visibility === 'password' ? 'draft' : 'publish'; }}
 				>
 					{saving && status === 'publish' ? 'Publishing…' : 'Publish'}
 				</button>
@@ -155,10 +155,10 @@
 								<div class="sp-panel-section-body">
 									<div class="sp-field">
 										<label class="sp-label">Visibility</label>
-										<select class="sp-select" bind:value={status}>
-											<option value="publish">Public</option>
+										<select class="sp-select" bind:value={visibility}>
+											<option value="public">Public</option>
 											<option value="private">Private</option>
-											<option value="draft">Password Protected</option>
+											<option value="password">Password Protected</option>
 										</select>
 									</div>
 									<div class="sp-field" style="display:flex;align-items:center;gap:8px;margin-top:8px;">

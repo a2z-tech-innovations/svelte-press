@@ -10,7 +10,7 @@
 		onupdate: (block: Block) => void;
 	} = $props();
 
-	let localContent = $state(block.content ?? '');
+	let localContent = $state((block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 	let prevId = $state(block.id);
 	let url = $derived(String(block.attrs.url ?? ''));
 	let target = $derived(String(block.attrs.target ?? '_self') as '_self' | '_blank');
@@ -20,7 +20,7 @@
 		const id = block.id;
 		if (id !== prevId) {
 			prevId = id;
-			localContent = untrack(() => block.content ?? '');
+			localContent = untrack(() => (block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 		}
 	});
 

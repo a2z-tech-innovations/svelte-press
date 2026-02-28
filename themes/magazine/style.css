@@ -1,0 +1,13 @@
+/* Magazine theme — editorial, bold */
+:root {
+  --theme-font-body: Georgia, 'Times New Roman', serif;
+  --theme-font-heading: Impact, 'Arial Narrow', Arial, sans-serif;
+  --theme-color-bg: #ffffff;
+  --theme-color-surface: #1a1a2e;
+  --theme-color-text: #1a1a1a;
+  --theme-color-muted: #555555;
+  --theme-color-accent: #e63946;
+  --theme-color-border: #dddddd;
+  --theme-max-width: 1100px;
+  --theme-sidebar-width: 300px;
+}

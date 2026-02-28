@@ -12,9 +12,10 @@
 		href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600&display=swap"
 		rel="stylesheet"
 	/>
+	<link rel="stylesheet" href={data.themeCssUrl} />
 </svelte:head>
 
-<div class="fp-site">
+<div class="fp-site" data-theme={data.themeSlug}>
 	<header class="fp-header">
 		<div class="fp-header-inner">
 			<div class="fp-branding">
@@ -126,22 +127,22 @@
 	}
 
 	:global(body) {
-		font-family: 'Inter', system-ui, sans-serif;
+		font-family: var(--theme-font-body, 'Inter', system-ui, sans-serif);
 		font-size: 16px;
 		line-height: 1.6;
-		color: #1d2327;
-		background: #fff;
+		color: var(--theme-color-text, #1d2327);
+		background: var(--theme-color-bg, #fff);
 		-webkit-font-smoothing: antialiased;
 	}
 
 	:global(a) {
-		color: #1d2327;
+		color: var(--theme-color-text, #1d2327);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
 
 	:global(a:hover) {
-		color: #2271b1;
+		color: var(--theme-color-accent, #2271b1);
 	}
 
 	:global(img) {
@@ -152,15 +153,15 @@
 
 	/* ── Header ── */
 	.fp-header {
-		border-bottom: 1px solid #e8e8e8;
-		background: #fff;
+		border-bottom: 1px solid var(--theme-color-border, #e8e8e8);
+		background: var(--theme-color-bg, #fff);
 		position: sticky;
 		top: 0;
 		z-index: 100;
 	}
 
 	.fp-header-inner {
-		max-width: 1100px;
+		max-width: var(--theme-max-width, 1100px);
 		margin: 0 auto;
 		padding: 0 1.5rem;
 		display: flex;
@@ -174,16 +175,16 @@
 	}
 
 	.fp-site-name {
-		font-family: 'Playfair Display', Georgia, serif;
+		font-family: var(--theme-font-heading, 'Playfair Display', Georgia, serif);
 		font-size: 1.35rem;
 		font-weight: 700;
-		color: #1d2327;
+		color: var(--theme-color-text, #1d2327);
 		text-decoration: none;
 		letter-spacing: -0.01em;
 	}
 
 	.fp-site-name:hover {
-		color: #2271b1;
+		color: var(--theme-color-accent, #2271b1);
 	}
 
 	.fp-site-description {
@@ -207,7 +208,7 @@
 	.fp-nav-link {
 		font-size: 0.875rem;
 		font-weight: 500;
-		color: #1d2327;
+		color: var(--theme-color-text, #1d2327);
 		text-decoration: none;
 		padding: 0.375rem 0.75rem;
 		border-radius: 4px;
@@ -215,8 +216,8 @@
 	}
 
 	.fp-nav-link:hover {
-		background: #f0f0f1;
-		color: #1d2327;
+		background: var(--theme-color-surface, #f0f0f1);
+		color: var(--theme-color-text, #1d2327);
 	}
 
 	/* ── Header Search ── */
@@ -241,7 +242,7 @@
 	}
 
 	.fp-search-input:focus {
-		border-color: #2271b1;
+		border-color: var(--theme-color-accent, #2271b1);
 	}
 
 	.fp-search-input--full {
@@ -261,17 +262,17 @@
 	}
 
 	.fp-search-btn:hover {
-		border-color: #2271b1;
-		color: #2271b1;
+		border-color: var(--theme-color-accent, #2271b1);
+		color: var(--theme-color-accent, #2271b1);
 	}
 
 	/* ── Layout ── */
 	.fp-wrap {
-		max-width: 1100px;
+		max-width: var(--theme-max-width, 1100px);
 		margin: 0 auto;
 		padding: 2.5rem 1.5rem;
 		display: grid;
-		grid-template-columns: 1fr 280px;
+		grid-template-columns: 1fr var(--theme-sidebar-width, 280px);
 		gap: 3rem;
 	}
 
@@ -289,11 +290,11 @@
 	}
 
 	.fp-widget-title {
-		font-family: 'Playfair Display', Georgia, serif;
+		font-family: var(--theme-font-heading, 'Playfair Display', Georgia, serif);
 		font-size: 1rem;
 		font-weight: 700;
-		color: #1d2327;
-		border-bottom: 2px solid #1d2327;
+		color: var(--theme-color-text, #1d2327);
+		border-bottom: 2px solid var(--theme-color-text, #1d2327);
 		padding-bottom: 0.5rem;
 		margin-bottom: 1rem;
 	}
@@ -306,7 +307,7 @@
 	.fp-widget-search-btn {
 		margin-top: 0.5rem;
 		padding: 0.5rem 1rem;
-		background: #1d2327;
+		background: var(--theme-color-text, #1d2327);
 		color: #fff;
 		border: none;
 		border-radius: 4px;
@@ -318,18 +319,18 @@
 	}
 
 	.fp-widget-search-btn:hover {
-		background: #2271b1;
+		background: var(--theme-color-accent, #2271b1);
 	}
 
 	/* ── Footer ── */
 	.fp-footer {
-		border-top: 1px solid #e8e8e8;
-		background: #fff;
+		border-top: 1px solid var(--theme-color-border, #e8e8e8);
+		background: var(--theme-color-bg, #fff);
 		margin-top: 2rem;
 	}
 
 	.fp-footer-inner {
-		max-width: 1100px;
+		max-width: var(--theme-max-width, 1100px);
 		margin: 0 auto;
 		padding: 1.5rem;
 		display: flex;
@@ -341,7 +342,7 @@
 
 	.fp-footer-copy {
 		font-size: 0.875rem;
-		color: #646970;
+		color: var(--theme-color-muted, #646970);
 	}
 
 	.fp-footer-description {
@@ -356,12 +357,12 @@
 	}
 
 	.fp-footer-links a {
-		color: #646970;
+		color: var(--theme-color-muted, #646970);
 		text-decoration: none;
 	}
 
 	.fp-footer-links a:hover {
-		color: #2271b1;
+		color: var(--theme-color-accent, #2271b1);
 	}
 
 	@media (max-width: 768px) {

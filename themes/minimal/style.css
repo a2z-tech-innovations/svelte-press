@@ -1,0 +1,13 @@
+/* Minimal theme — stark, typographic */
+:root {
+  --theme-font-body: 'Courier New', Courier, monospace;
+  --theme-font-heading: 'Courier New', Courier, monospace;
+  --theme-color-bg: #fafafa;
+  --theme-color-surface: #f0f0f0;
+  --theme-color-text: #111111;
+  --theme-color-muted: #888888;
+  --theme-color-accent: #000000;
+  --theme-color-border: #cccccc;
+  --theme-max-width: 640px;
+  --theme-sidebar-width: 220px;
+}

@@ -59,3 +59,7 @@ export function setActiveTheme(slug: string): void {
 export function getThemeCssUrl(slug: string): string {
 	return `/themes/${slug}/style.css`;
 }
+
+export function getActiveThemeStyleUrl(activeThemeSlug: string): string {
+	return `/themes/${activeThemeSlug}/style.css`;
+}

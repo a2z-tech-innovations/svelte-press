@@ -10,13 +10,14 @@
 		onupdate: (block: Block) => void;
 	} = $props();
 
-	let localContent = $state(block.content ?? '');
+	let localContent = $state((block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 	let prevId = $state(block.id);
 
 	$effect(() => {
-		if (block.id !== untrack(() => prevId)) {
-			prevId = block.id;
-			localContent = block.content ?? '';
+		const id = block.id;
+		if (id !== untrack(() => prevId)) {
+			prevId = id;
+			localContent = untrack(() => (block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 		}
 	});
 
@@ -28,7 +29,8 @@
 
 	function handleInput(e: Event) {
 		const target = e.target as HTMLElement;
-		onupdate({ ...block, content: target.innerHTML });
+		const clean = target.innerHTML.replace(/<!--[\s\S]*?-->/g, '');
+		onupdate({ ...block, content: clean });
 	}
 
 	const fontSizes: Record<number, string> = {

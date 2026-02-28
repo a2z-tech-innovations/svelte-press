@@ -13,20 +13,22 @@
 	// localContent only updates when switching to a DIFFERENT block (id changes).
 	// While the user is typing in the SAME block, localContent stays put so
 	// {@html localContent} does not reset the contenteditable DOM.
-	let localContent = $state(block.content ?? '');
+	// HTML comments (<!---->) inserted by Svelte are stripped on load and on id change.
+	let localContent = $state((block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 	let prevId = $state(block.id);
 
 	$effect(() => {
 		const id = block.id; // tracked dependency
 		if (id !== prevId) {
 			prevId = id;
-			localContent = untrack(() => block.content ?? '');
+			localContent = untrack(() => (block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 		}
 	});
 
 	function handleInput(e: Event) {
 		const target = e.target as HTMLDivElement;
-		onupdate({ ...block, content: target.innerHTML });
+		const clean = target.innerHTML.replace(/<!--[\s\S]*?-->/g, '');
+		onupdate({ ...block, content: clean });
 	}
 
 	function handleKeydown(e: KeyboardEvent) {

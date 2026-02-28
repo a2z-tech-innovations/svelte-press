@@ -3,29 +3,9 @@
 	import { formatDate } from '$lib/utils.js';
 	import BlockEditor from '$lib/components/blocks/BlockEditor.svelte';
 	import type { Block } from '$lib/types/index.js';
+	import type { PageData, ActionData } from './$types.js';
 
-	let { data, form } = $props<{
-		data: {
-			post: {
-				id: number;
-				title: string;
-				slug: string;
-				content: unknown[];
-				excerpt: string;
-				status: string;
-				commentStatus: string;
-				authorId: number;
-				parentId: number | null;
-				menuOrder: number;
-				template: string;
-				postDate: Date | null;
-				modifiedDate: Date;
-			};
-			allPages: Array<{ id: number; title: string; parentId: number | null }>;
-			allUsers: Array<{ id: number; displayName: string; username: string }>;
-		};
-		form?: { success?: boolean; error?: string } | null;
-	}>();
+	let { data, form }: { data: PageData; form?: ActionData } = $props();
 
 	let title = $state(data.post.title);
 	let slug = $state(data.post.slug);

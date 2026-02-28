@@ -3,19 +3,15 @@
 	import { slugify } from '$lib/utils.js';
 	import BlockEditor from '$lib/components/blocks/BlockEditor.svelte';
 	import type { Block } from '$lib/types/index.js';
+	import type { PageData, ActionData } from './$types.js';
 
-	let { data, form } = $props<{
-		data: {
-			allPages: Array<{ id: number; title: string; parentId: number | null }>;
-			allUsers: Array<{ id: number; displayName: string; username: string }>;
-		};
-		form?: { error?: string } | null;
-	}>();
+	let { data, form }: { data: PageData; form?: ActionData } = $props();
 
 	let title = $state('');
 	let slug = $state('');
 	let excerpt = $state('');
 	let status = $state<'draft' | 'publish' | 'private' | 'pending'>('draft');
+	let visibility = $state<'public' | 'private' | 'password'>('public');
 	let authorId = $state(data.allUsers[0]?.id ?? 1);
 	let parentId = $state(0);
 	let menuOrder = $state(0);
@@ -28,8 +24,12 @@
 	let saving = $state(false);
 	let submitStatus = $state<string>('draft');
 
+	let slugManuallyEdited = $state(false);
+
 	$effect(() => {
-		if (title && !slug) slug = slugify(title);
+		if (title && !slugManuallyEdited) {
+			slug = slugify(title);
+		}
 	});
 
 	function toggleSection(key: string) {
@@ -71,7 +71,7 @@
 					type="submit"
 					class="sp-btn sp-btn-secondary sp-btn-sm"
 					disabled={saving}
-					onclick={() => { submitStatus = 'draft'; }}
+					onclick={() => { submitStatus = visibility === 'private' ? 'private' : 'draft'; }}
 				>
 					{saving && submitStatus === 'draft' ? 'Saving…' : 'Save Draft'}
 				</button>
@@ -79,7 +79,7 @@
 					type="submit"
 					class="sp-btn sp-btn-primary sp-btn-sm"
 					disabled={saving}
-					onclick={() => { submitStatus = 'publish'; }}
+					onclick={() => { submitStatus = visibility === 'private' ? 'private' : visibility === 'password' ? 'draft' : 'publish'; }}
 				>
 					{saving && submitStatus === 'publish' ? 'Publishing…' : 'Publish'}
 				</button>
@@ -131,10 +131,10 @@
 								<div class="sp-panel-section-body">
 									<div class="sp-field">
 										<label class="sp-label">Visibility</label>
-										<select class="sp-select" bind:value={status}>
-											<option value="publish">Public</option>
+										<select class="sp-select" bind:value={visibility}>
+											<option value="public">Public</option>
 											<option value="private">Private</option>
-											<option value="draft">Draft</option>
+											<option value="password">Password Protected</option>
 										</select>
 									</div>
 									<div class="sp-field" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
@@ -160,7 +160,7 @@
 								<div class="sp-panel-section-body">
 									<div class="sp-field">
 										<label class="sp-label">URL Slug</label>
-										<input type="text" class="sp-input" bind:value={slug} />
+										<input type="text" class="sp-input" bind:value={slug} oninput={() => { slugManuallyEdited = true; }} />
 									</div>
 								</div>
 							{/if}

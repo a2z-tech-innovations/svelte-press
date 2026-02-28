@@ -10,7 +10,7 @@
 		onupdate: (block: Block) => void;
 	} = $props();
 
-	let localContent = $state(block.content ?? '');
+	let localContent = $state((block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 	let prevId = $state(block.id);
 
 	let citation = $derived(String(block.attrs.citation ?? ''));
@@ -19,13 +19,14 @@
 		const id = block.id;
 		if (id !== prevId) {
 			prevId = id;
-			localContent = untrack(() => block.content ?? '');
+			localContent = untrack(() => (block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
 		}
 	});
 
 	function handleInput(e: Event) {
 		const target = e.target as HTMLElement;
-		onupdate({ ...block, content: target.innerHTML });
+		const clean = target.innerHTML.replace(/<!--[\s\S]*?-->/g, '');
+		onupdate({ ...block, content: clean });
 	}
 
 	function updateCitation(value: string) {

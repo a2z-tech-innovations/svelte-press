@@ -2,6 +2,7 @@ import type { LayoutServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { options, menus, menuItems } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { getActiveThemeStyleUrl } from '$lib/server/themes/index.js';
 
 export const load: LayoutServerLoad = async () => {
 	// Load site options
@@ -57,10 +58,15 @@ export const load: LayoutServerLoad = async () => {
 			.sort((a, b) => a.order - b.order);
 	}
 
+	const themeSlug = activeTheme;
+	const themeCssUrl = getActiveThemeStyleUrl(themeSlug);
+
 	return {
 		siteName,
 		siteDescription,
 		activeTheme,
+		themeSlug,
+		themeCssUrl,
 		menuItems: navMenuItems
 	};
 };

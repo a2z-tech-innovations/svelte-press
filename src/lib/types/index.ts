@@ -242,3 +242,15 @@ export interface AppLocals {
 	user: User | null;
 	sessionId: string | null;
 }
+
+// ─── Threaded Comments ────────────────────────────────────────────────────────
+
+export interface CommentNode {
+	id: number;
+	authorName: string;
+	authorUrl: string | null;
+	content: string;
+	date: Date | null;
+	avatarUrl: string;
+	children: CommentNode[];
+}

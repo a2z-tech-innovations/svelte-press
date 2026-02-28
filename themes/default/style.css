@@ -1,0 +1,13 @@
+/* Default theme — clean modern blog */
+:root {
+  --theme-font-body: Georgia, 'Times New Roman', serif;
+  --theme-font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --theme-color-bg: #ffffff;
+  --theme-color-surface: #f9f9f9;
+  --theme-color-text: #1a1a1a;
+  --theme-color-muted: #666666;
+  --theme-color-accent: #2271b1;
+  --theme-color-border: #e0e0e0;
+  --theme-max-width: 780px;
+  --theme-sidebar-width: 280px;
+}
