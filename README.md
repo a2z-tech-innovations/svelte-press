@@ -1,6 +1,6 @@
 # SveltePress
 
-> Built by [A to Z Tech Innovations LLC](https://a2ztech.dev)
+> Built by [A to Z Tech Innovations LLC](https://a2ztech.io)
 
 A full-featured, open-source WordPress clone built from scratch with SvelteKit 2, Svelte 5, TypeScript, and SQLite. Familiar WordPress-style admin, Gutenberg-style block editor, plugin hooks, theme switching, and a clean public frontend — with zero PHP.
 
@@ -383,5 +383,5 @@ pnpm dev
 ---
 
 <p align="center">
-  Built with ❤️ by <a href="https://a2ztech.dev"><strong>A to Z Tech Innovations LLC</strong></a>
+  Built with ❤️ by <a href="https://a2ztech.io"><strong>A to Z Tech Innovations LLC</strong></a>
 </p>
