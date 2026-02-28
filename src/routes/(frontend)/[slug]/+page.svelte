@@ -27,6 +27,17 @@
 				return `<pre><code>${block.content}</code></pre>`;
 			case 'html':
 				return block.content;
+			case 'embed': {
+				const embedHtml = String(block.attrs.embedHtml ?? '');
+				const embedUrl = String(block.attrs.url ?? '');
+				if (embedHtml) {
+					return `<div class="wp-embed-block">${embedHtml}</div>`;
+				}
+				if (embedUrl) {
+					return `<div class="wp-embed-block"><a href="${embedUrl}" target="_blank" rel="noopener noreferrer">${embedUrl}</a></div>`;
+				}
+				return '';
+			}
 			default:
 				return block.content ? `<p>${block.content}</p>` : '';
 		}

@@ -29,6 +29,9 @@ importers:
       node-cron:
         specifier: ^4.2.1
         version: 4.2.1
+      nodemailer:
+        specifier: ^8.0.1
+        version: 8.0.1
       sanitize-html:
         specifier: ^2.17.1
         version: 2.17.1
@@ -66,6 +69,9 @@ importers:
       '@types/node-cron':
         specifier: ^3.0.11
         version: 3.0.11
+      '@types/nodemailer':
+        specifier: ^7.0.11
+        version: 7.0.11
       '@types/sanitize-html':
         specifier: ^2.16.0
         version: 2.16.0
@@ -1029,6 +1035,9 @@ packages:
   '@types/node@25.3.2':
     resolution: {integrity: sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==}
 
+  '@types/nodemailer@7.0.11':
+    resolution: {integrity: sha512-E+U4RzR2dKrx+u3N4DlsmLaDC6mMZOM/TPROxA0UAPiTgI0y4CEFBmZE+coGWTjakDriRsXG368lNk1u9Q0a2g==}
+
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
 
@@ -1472,6 +1481,10 @@ packages:
 
   node-cron@4.2.1:
     resolution: {integrity: sha512-lgimEHPE/QDgFlywTd8yTR61ptugX3Qer29efeyWw2rv259HtGBNn1vZVmp8lB9uo9wC0t/AT4iGqXxia+CJFg==}
+    engines: {node: '>=6.0.0'}
+
+  nodemailer@8.0.1:
+    resolution: {integrity: sha512-5kcldIXmaEjZcHR6F28IKGSgpmZHaF1IXLWFTG+Xh3S+Cce4MiakLtWY+PlBU69fLbRa8HlaGIrC/QolUpHkhg==}
     engines: {node: '>=6.0.0'}
 
   obug@2.1.1:
@@ -2322,6 +2335,10 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
+  '@types/nodemailer@7.0.11':
+    dependencies:
+      '@types/node': 25.3.2
+
   '@types/resolve@1.20.2': {}
 
   '@types/sanitize-html@2.16.0':
@@ -2677,6 +2694,8 @@ snapshots:
       semver: 7.7.4
 
   node-cron@4.2.1: {}
+
+  nodemailer@8.0.1: {}
 
   obug@2.1.1: {}
 

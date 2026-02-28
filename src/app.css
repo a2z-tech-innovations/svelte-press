@@ -1104,3 +1104,27 @@
 
 .sp-diff-add { background: #e6ffec; }
 .sp-diff-remove { background: #ffebe9; }
+
+/* ── Embed block (frontend) ────────────────────────────────────── */
+.wp-embed-block {
+	position: relative;
+	width: 100%;
+	margin: 1.5rem 0;
+}
+
+.wp-embed-block iframe {
+	max-width: 100%;
+	border: none;
+	border-radius: 4px;
+}
+
+/* Responsive wrapper for padded 16:9 containers emitted by providers */
+.wp-embed-block > div[style*="padding"] {
+	position: relative;
+	width: 100%;
+}
+
+.wp-embed-block a {
+	color: #2271b1;
+	word-break: break-all;
+}

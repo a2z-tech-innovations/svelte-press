@@ -1,8 +1,9 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { media } from '$lib/server/db/schema.js';
 import { eq, and, count, desc, like } from 'drizzle-orm';
+import { requireCapability } from '$lib/server/api/auth.js';
 
 // ─── GET /api/v1/media ────────────────────────────────────────────────────────
 // List all media. Supports ?page=&per_page=&mime_type= filters.
@@ -77,4 +78,76 @@ export const GET: RequestHandler = async ({ url }) => {
 			'Access-Control-Expose-Headers': 'X-Total, X-Total-Pages'
 		}
 	});
+};
+
+// ─── PATCH /api/v1/media ──────────────────────────────────────────────────────
+// Update media metadata (alt, caption, description). Auth required (upload_files capability).
+// Query: ?id=<number>
+// Body: { alt?, caption?, description? }
+
+export const PATCH: RequestHandler = async (event) => {
+	const authError = requireCapability(event, 'upload_files');
+	if (authError) return authError;
+
+	const { url, request } = event;
+
+	const idParam = url.searchParams.get('id');
+	const id = idParam ? Number(idParam) : NaN;
+	if (!idParam || isNaN(id)) throw error(400, 'Query parameter "id" (number) is required');
+
+	const existing = db
+		.select({ id: media.id })
+		.from(media)
+		.where(eq(media.id, id))
+		.get();
+	if (!existing) throw error(404, `Media ${id} not found`);
+
+	let body: { alt?: unknown; caption?: unknown; description?: unknown };
+	try {
+		body = await request.json();
+	} catch {
+		throw error(400, 'Invalid JSON body');
+	}
+
+	const updates: Record<string, string> = {};
+	if (typeof body.alt === 'string') updates.alt = body.alt.trim();
+	if (typeof body.caption === 'string') updates.caption = body.caption.trim();
+	if (typeof body.description === 'string') updates.description = body.description.trim();
+
+	if (Object.keys(updates).length === 0) throw error(400, 'No updatable fields provided');
+
+	const [updated] = await db
+		.update(media)
+		.set(updates)
+		.where(eq(media.id, id))
+		.returning();
+
+	return json(updated);
+};
+
+// ─── DELETE /api/v1/media ─────────────────────────────────────────────────────
+// Delete a media record by id. Auth required (upload_files capability).
+// Query: ?id=<number>
+// Note: removes the DB record only; physical files on disk are not deleted.
+
+export const DELETE: RequestHandler = async (event) => {
+	const authError = requireCapability(event, 'upload_files');
+	if (authError) return authError;
+
+	const { url } = event;
+
+	const idParam = url.searchParams.get('id');
+	const id = idParam ? Number(idParam) : NaN;
+	if (!idParam || isNaN(id)) throw error(400, 'Query parameter "id" (number) is required');
+
+	const existing = db
+		.select({ id: media.id })
+		.from(media)
+		.where(eq(media.id, id))
+		.get();
+	if (!existing) throw error(404, `Media ${id} not found`);
+
+	await db.delete(media).where(eq(media.id, id));
+
+	return new Response(null, { status: 204 });
 };

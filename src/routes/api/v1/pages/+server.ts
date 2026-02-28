@@ -4,6 +4,7 @@ import { db } from '$lib/server/db/index.js';
 import { posts, users } from '$lib/server/db/schema.js';
 import { eq, and, desc, count } from 'drizzle-orm';
 import { can } from '$lib/server/permissions/index.js';
+import { requireCapability } from '$lib/server/api/auth.js';
 import { slugify } from '$lib/utils.js';
 import { nanoid } from 'nanoid';
 
@@ -112,9 +113,13 @@ export const GET: RequestHandler = async ({ url }) => {
 // ─── POST /api/v1/pages ───────────────────────────────────────────────────────
 // Create a new page. Auth required (edit_pages capability).
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user) throw error(401, 'Authentication required');
-	if (!can(locals.user.role, 'edit_pages')) throw error(403, 'Forbidden');
+export const POST: RequestHandler = async (event) => {
+	const authError = requireCapability(event, 'edit_pages');
+	if (authError) return authError;
+
+	const { request, locals } = event;
+	// locals.user is guaranteed non-null after requireCapability succeeds
+	const user = locals.user!;
 
 	let body: {
 		title?: unknown;
@@ -165,7 +170,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		: 'draft';
 
 	const effectiveStatus =
-		status === 'publish' && !can(locals.user.role, 'publish_pages') ? 'pending' : status;
+		status === 'publish' && !can(user.role, 'publish_pages') ? 'pending' : status;
 
 	const commentStatus =
 		body.commentStatus === 'closed' ? ('closed' as const) : ('open' as const);
@@ -194,7 +199,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			status: effectiveStatus,
 			commentStatus,
 			postDate,
-			authorId: locals.user.id,
+			authorId: user.id,
 			parentId,
 			postType: 'page',
 			format: 'standard',

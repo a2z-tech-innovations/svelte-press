@@ -4,6 +4,7 @@ import { db } from '$lib/server/db/index.js';
 import { posts, users, terms, postTerms } from '$lib/server/db/schema.js';
 import { eq, and, desc, count, like, or, inArray } from 'drizzle-orm';
 import { can } from '$lib/server/permissions/index.js';
+import { requireCapability } from '$lib/server/api/auth.js';
 import { slugify } from '$lib/utils.js';
 import { nanoid } from 'nanoid';
 
@@ -159,9 +160,13 @@ export const GET: RequestHandler = async ({ url }) => {
 // ─── POST /api/v1/posts ───────────────────────────────────────────────────────
 // Create a new post. Auth required. Body: { title, content, status, excerpt, categoryIds, tagIds }
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user) throw error(401, 'Authentication required');
-	if (!can(locals.user.role, 'edit_posts')) throw error(403, 'Forbidden');
+export const POST: RequestHandler = async (event) => {
+	const authError = requireCapability(event, 'edit_posts');
+	if (authError) return authError;
+
+	const { request, locals } = event;
+	// locals.user is guaranteed non-null after requireCapability succeeds
+	const user = locals.user!;
 
 	let body: {
 		title?: unknown;
@@ -203,7 +208,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Only authors+ can publish; contributors are forced to pending
 	const effectiveStatus =
-		status === 'publish' && !can(locals.user.role, 'publish_posts') ? 'pending' : status;
+		status === 'publish' && !can(user.role, 'publish_posts') ? 'pending' : status;
 
 	// Format validation
 	const allowedFormats = [
@@ -243,7 +248,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			status: effectiveStatus,
 			commentStatus,
 			postDate,
-			authorId: locals.user.id,
+			authorId: user.id,
 			parentId: null,
 			postType: 'post',
 			format,

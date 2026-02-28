@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { Block } from '$lib/types/index.js';
 
 	let {
@@ -11,13 +12,21 @@
 
 	let url = $derived(String(block.attrs.url ?? ''));
 	let caption = $derived(String(block.attrs.caption ?? ''));
-	let urlInput = $state(url);
+	let embedHtml = $derived(String(block.attrs.embedHtml ?? ''));
+	let urlInput = $state(untrack(() => String(block.attrs.url ?? '')));
+	let loading = $state(false);
+	let fetchError = $state('');
 
-	function applyUrl() {
-		if (urlInput.trim()) {
-			onupdate({ ...block, attrs: { ...block.attrs, url: urlInput.trim() } });
+	// When a different block is selected, sync urlInput from props
+	let prevBlockId = $state(untrack(() => block.id));
+	$effect(() => {
+		const id = block.id;
+		if (id !== prevBlockId) {
+			prevBlockId = id;
+			urlInput = String(block.attrs.url ?? '');
+			fetchError = '';
 		}
-	}
+	});
 
 	function getYoutubeId(u: string): string | null {
 		const match = u.match(
@@ -31,8 +40,10 @@
 		return match ? match[1] : null;
 	}
 
-	let embedType = $derived((): 'youtube' | 'vimeo' | 'link' | 'none' => {
+	// Determine how to render a stored embed
+	let embedType = $derived((): 'html' | 'youtube' | 'vimeo' | 'link' | 'none' => {
 		if (!url) return 'none';
+		if (embedHtml) return 'html';
 		if (getYoutubeId(url)) return 'youtube';
 		if (getVimeoId(url)) return 'vimeo';
 		return 'link';
@@ -48,10 +59,56 @@
 		}
 		return '';
 	});
+
+	async function fetchEmbed() {
+		const trimmed = urlInput.trim();
+		if (!trimmed) return;
+
+		loading = true;
+		fetchError = '';
+
+		try {
+			const res = await fetch(`/api/oembed?url=${encodeURIComponent(trimmed)}`);
+			const data = await res.json();
+
+			if (!res.ok || data.error) {
+				// oEmbed not available — save URL only (will fall back to iframe/link render)
+				fetchError = data.error ?? 'Could not fetch embed preview';
+				onupdate({
+					...block,
+					attrs: { ...block.attrs, url: trimmed, embedHtml: '' }
+				});
+			} else {
+				onupdate({
+					...block,
+					attrs: {
+						...block.attrs,
+						url: trimmed,
+						embedHtml: data.html ?? '',
+						title: data.title ?? '',
+						providerName: data.provider_name ?? ''
+					}
+				});
+			}
+		} catch {
+			fetchError = 'Network error fetching embed';
+			// Still save the URL so the block is not empty
+			onupdate({ ...block, attrs: { ...block.attrs, url: trimmed, embedHtml: '' } });
+		} finally {
+			loading = false;
+		}
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			fetchEmbed();
+		}
+	}
 </script>
 
 <div class="sp-embed-block">
-	{#if !url}
+	{#if !url && embedType() === 'none'}
 		<div class="sp-embed-placeholder">
 			<svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
 				<rect x="2" y="6" width="28" height="20" rx="2" stroke="currentColor" stroke-width="1.5"/>
@@ -64,17 +121,41 @@
 					class="sp-input"
 					placeholder="https://youtube.com/watch?v=..."
 					bind:value={urlInput}
-					onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyUrl(); } }}
+					onkeydown={handleKeydown}
 					style="flex:1"
 					onclick={(e) => e.stopPropagation()}
 				/>
 				<button
 					type="button"
 					class="sp-btn sp-btn-primary sp-btn-sm"
-					onclick={(e) => { e.stopPropagation(); applyUrl(); }}
-				>Embed</button>
+					onclick={(e) => { e.stopPropagation(); fetchEmbed(); }}
+					disabled={loading}
+				>{loading ? 'Loading…' : 'Embed'}</button>
 			</div>
+			{#if fetchError}
+				<p class="sp-embed-error">{fetchError}</p>
+			{/if}
 		</div>
+	{:else if embedType() === 'html'}
+		<figure class="sp-embed-figure">
+			<div class="sp-embed-html-preview">
+				{@html embedHtml}
+			</div>
+			<div class="sp-embed-controls" onclick={(e) => e.stopPropagation()}>
+				<input
+					type="text"
+					class="sp-embed-caption-input"
+					placeholder="Add caption..."
+					value={caption}
+					oninput={(e) => onupdate({ ...block, attrs: { ...block.attrs, caption: (e.target as HTMLInputElement).value } })}
+				/>
+				<button
+					type="button"
+					class="sp-btn sp-btn-secondary sp-btn-sm"
+					onclick={() => onupdate({ ...block, attrs: { ...block.attrs, url: '', embedHtml: '' } })}
+				>Replace</button>
+			</div>
+		</figure>
 	{:else if embedType() === 'youtube' || embedType() === 'vimeo'}
 		<figure class="sp-embed-figure">
 			<div class="sp-embed-iframe-wrap">
@@ -98,11 +179,12 @@
 				<button
 					type="button"
 					class="sp-btn sp-btn-secondary sp-btn-sm"
-					onclick={() => onupdate({ ...block, attrs: { ...block.attrs, url: '' } })}
+					onclick={() => onupdate({ ...block, attrs: { ...block.attrs, url: '', embedHtml: '' } })}
 				>Replace</button>
 			</div>
 		</figure>
 	{:else}
+		<!-- link fallback — URL set but no oEmbed HTML available -->
 		<div class="sp-embed-link-card" onclick={(e) => e.stopPropagation()}>
 			<svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
 				<path d="M8 12l-4-4 4-4M12 8l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -112,8 +194,31 @@
 			<button
 				type="button"
 				class="sp-btn sp-btn-secondary sp-btn-sm"
-				onclick={() => onupdate({ ...block, attrs: { ...block.attrs, url: '' } })}
+				onclick={() => onupdate({ ...block, attrs: { ...block.attrs, url: '', embedHtml: '' } })}
 			>Replace</button>
+		</div>
+		{#if fetchError}
+			<p class="sp-embed-error">{fetchError}</p>
+		{/if}
+	{/if}
+
+	<!-- URL input row shown when a URL is already set but we want to let user re-fetch -->
+	{#if url && embedType() !== 'none'}
+		<div class="sp-embed-refetch-row" onclick={(e) => e.stopPropagation()}>
+			<input
+				type="url"
+				class="sp-input sp-input-sm"
+				placeholder="https://..."
+				bind:value={urlInput}
+				onkeydown={handleKeydown}
+				style="flex:1; font-size:12px;"
+			/>
+			<button
+				type="button"
+				class="sp-btn sp-btn-secondary sp-btn-sm"
+				onclick={fetchEmbed}
+				disabled={loading}
+			>{loading ? 'Loading…' : 'Re-fetch'}</button>
 		</div>
 	{/if}
 </div>
@@ -143,8 +248,26 @@
 		max-width: 480px;
 	}
 
+	.sp-embed-error {
+		color: var(--sp-error);
+		font-size: 12px;
+		margin: 0;
+	}
+
 	.sp-embed-figure {
 		margin: 0;
+	}
+
+	.sp-embed-html-preview {
+		width: 100%;
+		overflow: hidden;
+		border-radius: 4px;
+	}
+
+	.sp-embed-html-preview :global(iframe) {
+		max-width: 100%;
+		border: none;
+		border-radius: 4px;
 	}
 
 	.sp-embed-iframe-wrap {
@@ -202,5 +325,12 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		color: var(--sp-primary);
+	}
+
+	.sp-embed-refetch-row {
+		display: flex;
+		gap: 8px;
+		margin-top: 8px;
+		align-items: center;
 	}
 </style>

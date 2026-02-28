@@ -96,6 +96,26 @@
 					<a href="/">Browse posts</a>
 				</p>
 			</div>
+
+			{#if data.archiveMonths && data.archiveMonths.length > 0}
+				<div class="fp-widget">
+					<h3 class="fp-widget-title">Archives</h3>
+					<ul class="fp-archive-list">
+						{#each data.archiveMonths as entry}
+							<li class="fp-archive-item">
+								<a
+									href="/{entry.year}/{entry.month}"
+									class="fp-archive-link"
+								>
+									{new Date(Number(entry.year), Number(entry.month) - 1, 1).toLocaleString('default', { month: 'long' })}
+									{entry.year}
+								</a>
+								<span class="fp-archive-count-badge">({entry.count})</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
 		</aside>
 	</div>
 
@@ -320,6 +340,36 @@
 
 	.fp-widget-search-btn:hover {
 		background: var(--theme-color-accent, #2271b1);
+	}
+
+	/* ── Archives widget ── */
+	.fp-archive-list {
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.fp-archive-item {
+		display: flex;
+		align-items: baseline;
+		gap: 0.375rem;
+		font-size: 0.875rem;
+	}
+
+	.fp-archive-link {
+		color: var(--theme-color-text, #1d2327);
+		text-decoration: none;
+	}
+
+	.fp-archive-link:hover {
+		color: var(--theme-color-accent, #2271b1);
+		text-decoration: underline;
+	}
+
+	.fp-archive-count-badge {
+		font-size: 0.75rem;
+		color: #646970;
 	}
 
 	/* ── Footer ── */

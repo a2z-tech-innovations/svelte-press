@@ -1,7 +1,7 @@
 import type { LayoutServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { options, menus, menuItems } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getActiveThemeStyleUrl } from '$lib/server/themes/index.js';
 
 export const load: LayoutServerLoad = async () => {
@@ -61,12 +61,27 @@ export const load: LayoutServerLoad = async () => {
 	const themeSlug = activeTheme;
 	const themeCssUrl = getActiveThemeStyleUrl(themeSlug);
 
+	// Archive months: distinct year/month combos with published post counts
+	type ArchiveMonthRow = { year: string; month: string; count: number };
+	const archiveMonths = db.all<ArchiveMonthRow>(sql`
+		SELECT
+			strftime('%Y', datetime(post_date, 'unixepoch')) AS year,
+			strftime('%m', datetime(post_date, 'unixepoch')) AS month,
+			COUNT(*) AS count
+		FROM posts
+		WHERE status = 'publish' AND post_type = 'post' AND post_date IS NOT NULL
+		GROUP BY year, month
+		ORDER BY year DESC, month DESC
+		LIMIT 12
+	`);
+
 	return {
 		siteName,
 		siteDescription,
 		activeTheme,
 		themeSlug,
 		themeCssUrl,
-		menuItems: navMenuItems
+		menuItems: navMenuItems,
+		archiveMonths
 	};
 };

@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { terms } from '$lib/server/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
-import { can } from '$lib/server/permissions/index.js';
+import { requireCapability } from '$lib/server/api/auth.js';
 import { slugify } from '$lib/utils.js';
 import { nanoid } from 'nanoid';
 
@@ -32,9 +32,11 @@ export const GET: RequestHandler = async () => {
 // Create a new category. Auth required (manage_categories capability).
 // Body: { name, slug?, description?, parentId? }
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user) throw error(401, 'Authentication required');
-	if (!can(locals.user.role, 'manage_categories')) throw error(403, 'Forbidden');
+export const POST: RequestHandler = async (event) => {
+	const authError = requireCapability(event, 'manage_categories');
+	if (authError) return authError;
+
+	const { request } = event;
 
 	let body: {
 		name?: unknown;

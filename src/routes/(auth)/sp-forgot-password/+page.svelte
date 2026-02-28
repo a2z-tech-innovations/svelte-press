@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	let { form } = $props<{ form?: { sent?: boolean; devToken?: string; email?: string; error?: string } | null }>();
+	let { form }: { form?: { sent?: boolean; devToken?: string; email?: string; error?: string } | null } = $props();
 	let loading = $state(false);
 </script>
 
@@ -28,8 +28,13 @@
 					</p>
 					{#if form.devToken}
 						<div style="background:#f0f7ff; border:1px solid #b3d4f5; border-radius:4px; padding:10px; font-size:11px; text-align:left;">
-							<strong>Dev mode — reset token:</strong><br />
-							<code style="word-break:break-all; font-size:10px">{form.devToken}</code>
+							{#if form.devToken.startsWith('http')}
+								<strong>Dev mode — email preview:</strong><br />
+								<a href={form.devToken} target="_blank" rel="noopener noreferrer" style="word-break:break-all; font-size:10px">{form.devToken}</a>
+							{:else}
+								<strong>Dev mode — reset token:</strong><br />
+								<code style="word-break:break-all; font-size:10px">{form.devToken}</code>
+							{/if}
 						</div>
 					{/if}
 				</div>

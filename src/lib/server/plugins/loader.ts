@@ -20,13 +20,12 @@ export async function loadPlugins(): Promise<void> {
 
 	if (!existsSync(PLUGINS_DIR)) return;
 
-	// Get active plugins from DB
-	const row = await db
-		.select()
+	// Get active plugins from DB (sync read — better-sqlite3)
+	const row = db.select({ value: options.optionValue })
 		.from(options)
 		.where(eq(options.optionName, 'active_plugins'))
-		.limit(1);
-	const activePlugins: string[] = row.length > 0 ? JSON.parse(row[0].optionValue) : [];
+		.get();
+	const activePlugins: string[] = row?.value ? JSON.parse(row.value) : [];
 
 	const pluginDirs = readdirSync(PLUGINS_DIR, { withFileTypes: true })
 		.filter((d) => d.isDirectory())

@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { db } from '$lib/server/db/index.js';
 import { posts, users, comments, postTerms, terms } from '$lib/server/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
+import { sendEmail } from '$lib/server/email/index.js';
 
 function gravatar(email: string, size = 48): string {
 	const hash = createHash('md5').update((email ?? '').trim().toLowerCase()).digest('hex');
@@ -130,12 +131,19 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-	comment: async ({ request, params, getClientAddress }) => {
+	comment: async (event) => {
+		const { request, params, getClientAddress } = event;
 		const { slug } = params;
 
-		// Find the post
+		// Find the post (include title, authorId, and slug for the notification email)
 		const post = db
-			.select({ id: posts.id, commentStatus: posts.commentStatus })
+			.select({
+				id: posts.id,
+				title: posts.title,
+				slug: posts.slug,
+				commentStatus: posts.commentStatus,
+				authorId: posts.authorId
+			})
 			.from(posts)
 			.where(and(eq(posts.slug, slug), eq(posts.status, 'publish')))
 			.get();
@@ -177,6 +185,36 @@ export const actions: Actions = {
 			parentId,
 			date: new Date()
 		});
+
+		// Send email notification to the post author (fire-and-forget; never block the response)
+		if (post.authorId) {
+			const postAuthor = db
+				.select({ email: users.email, displayName: users.displayName })
+				.from(users)
+				.where(eq(users.id, post.authorId))
+				.get();
+
+			// Only notify if we have an author email and the commenter is not the author
+			if (postAuthor?.email && postAuthor.email !== email) {
+				const postUrl = `${event.url.origin}/${post.slug}`;
+				sendEmail({
+					to: postAuthor.email,
+					subject: `New comment on "${post.title}"`,
+					html: `
+						<h3>New comment on <a href="${postUrl}">${post.title}</a></h3>
+						<p><strong>${name}</strong> wrote:</p>
+						<blockquote style="border-left:3px solid #ccc; padding-left:12px; color:#555">${content}</blockquote>
+						<p>
+							<a href="${postUrl}#comments">View comment</a> &nbsp;|&nbsp;
+							<a href="${event.url.origin}/sp-admin/comments">Moderate in admin</a>
+						</p>
+					`,
+					text: `${name} commented on "${post.title}":\n\n${content}\n\nView: ${postUrl}\nModerate: ${event.url.origin}/sp-admin/comments`
+				}).catch((err) => {
+					console.error('[CommentNotification] Email send failed:', err);
+				});
+			}
+		}
 
 		return {
 			success: true,

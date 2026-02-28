@@ -3,6 +3,16 @@ import { db } from './index.js';
 import { users, options, terms } from './schema.js';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
+import { readdirSync, existsSync } from 'fs';
+import { join } from 'path';
+
+function discoverPluginSlugs(): string[] {
+	const pluginsDir = join(process.cwd(), 'plugins');
+	if (!existsSync(pluginsDir)) return [];
+	return readdirSync(pluginsDir, { withFileTypes: true })
+		.filter((d) => d.isDirectory() && existsSync(join(pluginsDir, d.name, 'plugin.ts')))
+		.map((d) => d.name);
+}
 
 async function seed() {
 	console.log('Seeding database…');
@@ -24,6 +34,9 @@ async function seed() {
 	}
 
 	// ── Default options ─────────────────────────────────────────────────────
+	const defaultActiveSlugs = discoverPluginSlugs();
+	console.log(`  – Discovered plugins: [${defaultActiveSlugs.join(', ') || 'none'}]`);
+
 	const defaults: Array<{ optionName: string; optionValue: string; autoload: boolean }> = [
 		{ optionName: 'siteurl', optionValue: 'http://localhost:5173', autoload: true },
 		{ optionName: 'blogname', optionValue: 'SveltePress', autoload: true },
@@ -34,7 +47,7 @@ async function seed() {
 		{ optionName: 'time_format', optionValue: 'h:mm a', autoload: true },
 		{ optionName: 'timezone', optionValue: 'UTC', autoload: true },
 		{ optionName: 'active_theme', optionValue: 'default', autoload: true },
-		{ optionName: 'active_plugins', optionValue: '[]', autoload: true },
+		{ optionName: 'active_plugins', optionValue: JSON.stringify(defaultActiveSlugs), autoload: true },
 		{
 			optionName: 'show_on_front',
 			optionValue: 'posts',
