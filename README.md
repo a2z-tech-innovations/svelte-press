@@ -357,12 +357,7 @@ Emails sent:
 
 ## Known Issues & Incomplete Features
 
-The core content creation and management flow works end-to-end. The following items are partially implemented or have known limitations.
-
-### Known Bugs
-
-- **Hydration mismatch warning** — A `[svelte] hydration_mismatch` console warning appears on post edit pages. Does not affect functionality.
-- **Nested form warning** — The post edit page logs a `node_invalid_placement_ssr: <form>` error. Visual behavior is unaffected.
+The project is feature-complete. The following items are intentionally out of scope for v1.
 
 ### Incomplete Features
 

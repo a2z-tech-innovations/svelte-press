@@ -568,8 +568,7 @@ All features are complete and working end-to-end:
 
 ## Known Issues / Bugs
 
-1. **Hydration mismatch warning** — console warning on post edit pages; no functional impact
-2. **Nested form SSR warning** — `node_invalid_placement_ssr: <form>` on post edit page; no functional impact
+None.
 
 ## Remaining Incomplete Features
 
@@ -598,3 +597,4 @@ All features are complete and working end-to-end:
 15. **Trash/restore pattern**: Always save pre-trash status to `post_meta._trash_status` before trashing. Restore reads and deletes this meta. Never hardcode `status: 'draft'` on restore.
 16. **Permalink URLs**: All listing pages (home, category, tag, author, search, date archive) must call `getPermalinkUrl(post, data.permalinkStructure)` — never hardcode `/${post.slug}`.
 17. **Activity logging**: All significant admin mutations must call `logActivity(...).catch(() => {})` — fire-and-forget, never throw.
+18. **Nested forms**: Never place a `<form>` inside the main editor save form. For secondary actions (trash, restore), add standalone `<form id="sp-trash-form">` / `<form id="sp-restore-form">` after the closing `</form>` and reference them via `form="sp-trash-form"` on the button.
