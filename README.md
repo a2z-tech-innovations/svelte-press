@@ -19,6 +19,7 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - [Plugin System](#plugin-system)
 - [Theme System](#theme-system)
 - [REST API](#rest-api)
+- [Email Configuration](#email-configuration)
 - [Known Issues & Incomplete Features](#known-issues--incomplete-features)
 - [Contributing](#contributing)
 
@@ -44,11 +45,13 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **Stored at** `static/uploads/YYYY/MM/`
 
 ### Comments
-- **Threaded comments** — Parent/child comment structure on posts
+- **Threaded comments** — Nested reply UI on the public frontend with indented display
+- **Reply button** — Click Reply on any comment to switch the form into reply mode
 - **Moderation queue** — Approve, unapprove, mark as spam, or trash comments
 - **Comment status** — Per-post control (open/closed)
 - **Gravatar support** — MD5-hashed email lookups for user avatars
 - **Guest commenting** — Name, email, website; no account required
+- **Email notifications** — Post author emailed when a new comment is submitted
 
 ### Users & Roles
 - **Five roles** — Administrator, Editor, Author, Contributor, Subscriber
@@ -60,16 +63,17 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 ### Taxonomy
 - **Categories** — Hierarchical (parent/child), with slugs and descriptions
 - **Tags** — Flat taxonomy; attach multiple tags per post
-- **Archive pages** — Category, tag, author, and date-based archives on the public frontend
+- **Archive pages** — Category, tag, author, date (`/YYYY/MM/`), and search archives on the public frontend
 
 ### Navigation & Widgets
-- **Menu builder** — Create menus, add pages/posts/custom links/categories, drag-and-drop reorder, nested sub-items, assign to theme locations
-- **Widget areas** — Sidebar, Footer columns; drag available widgets into areas
-- **Built-in widgets** — Search, Recent Posts, Recent Comments, Archives, Categories, Tag Cloud, Text, Custom HTML
+- **Menu builder** — Create menus, add pages/posts/custom links/categories, reorder, assign to theme locations
+- **Widget areas** — Sidebar, Footer columns; available widget list
+- **Built-in widgets** — Search, Recent Posts, Recent Comments, Archives (with month links), Categories, Tag Cloud, Text, Custom HTML
 
 ### Authentication
 - **Session-based auth** — Thin custom session table (nanoid tokens, HTTP-only cookies, 30-day expiry)
 - **Login / Register / Forgot Password** — Full auth flow at `/sp-login`, `/sp-register`, `/sp-forgot-password`
+- **Password reset email** — Sends via SMTP (or ethereal.email in dev for preview)
 - **Secure password hashing** — bcryptjs
 
 ### Settings
@@ -87,9 +91,10 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **WXR import** — Upload and parse a WXR file; imports posts, pages, and comments
 
 ### Developer Features
-- **Plugin system** — WordPress-style `addAction` / `doAction` / `addFilter` / `applyFilters` hook API; plugins loaded from `plugins/*/plugin.ts` at server startup
-- **Theme system** — Themes in `themes/*/`; active theme stored in `options` table; switch via admin UI
-- **REST API** — Full CRUD at `/api/v1/*` for posts, pages, media, comments, users, categories, tags
+- **Plugin system** — WordPress-style `addAction` / `doAction` / `addFilter` / `applyFilters` hook API; active plugins loaded from `plugins/*/plugin.ts` at server startup; activation state persisted in DB
+- **Theme system** — Themes in `themes/*/`; active theme stored in `options` table; per-theme `style.css` dynamically loaded on frontend; switch via admin UI
+- **REST API** — Full CRUD at `/api/v1/*` for posts, pages, media, comments, users, categories, tags; all write endpoints require authentication
+- **oEmbed** — `/api/oembed` proxy resolves YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok embed HTML
 - **Drizzle ORM** — Type-safe SQLite queries; schema migrations via `drizzle-kit`
 - **Svelte 5 runes** — All state via `$state`, `$derived`, `$effect`; no legacy stores
 
@@ -178,7 +183,7 @@ The editor supports 21 block types across four categories:
 | Block | Description |
 |---|---|
 | Button | CTA button with fill/outline style, URL, and new-tab toggle |
-| Embed | oEmbed-style URL embed (YouTube, Twitter, etc.) |
+| Embed | oEmbed URL embed — fetches HTML from YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok |
 
 **Block controls** (all blocks): move up/down, duplicate, delete, add block below.
 
@@ -200,14 +205,14 @@ All admin routes live under `/sp-admin/`:
 | `/sp-admin/comments` | Comment moderation with status tabs and bulk actions |
 | `/sp-admin/categories` | Split-panel add/edit/delete with hierarchy |
 | `/sp-admin/tags` | Flat taxonomy management |
-| `/sp-admin/menus` | Drag-and-drop menu builder |
+| `/sp-admin/menus` | Menu builder with pages/posts/custom links/categories |
 | `/sp-admin/widgets` | Widget area management |
 | `/sp-admin/users` | User list with role filter tabs |
 | `/sp-admin/users/new` | Create new user |
 | `/sp-admin/users/[id]` | Edit user |
 | `/sp-admin/profile` | Current user profile and password |
 | `/sp-admin/themes` | Theme grid with activate and details modal |
-| `/sp-admin/plugins` | Plugin list with activate/deactivate |
+| `/sp-admin/plugins` | Plugin list with activate/deactivate (state persisted) |
 | `/sp-admin/settings/general` | General settings |
 | `/sp-admin/settings/reading` | Reading settings |
 | `/sp-admin/settings/writing` | Writing settings |
@@ -224,19 +229,20 @@ All admin routes live under `/sp-admin/`:
 | Route | Description |
 |---|---|
 | `/` | Paginated blog home |
-| `/[slug]` | Single post or page |
+| `/[slug]` | Single post or page with threaded comments |
 | `/category/[slug]` | Category archive |
 | `/tag/[slug]` | Tag archive |
 | `/author/[username]` | Author archive with profile |
 | `/search` | Full-text search results |
+| `/[year]/[month]/` | Date archive (e.g. `/2026/02/`) |
 
-Frontend features: header with primary nav, sidebar with widgets (search, categories), footer, comment form on posts, Gravatar avatars, responsive layout.
+Frontend features: header with primary nav, sidebar with widgets (search, categories, archives), footer, threaded comment form on posts, Gravatar avatars, responsive layout, active theme CSS loaded dynamically.
 
 ---
 
 ## Plugin System
 
-Plugins live in `plugins/<name>/plugin.ts` and are loaded at server startup via `hooks.server.ts`.
+Plugins live in `plugins/<name>/plugin.ts` and are loaded at server startup. Only plugins listed in the `active_plugins` option are loaded. The admin UI allows toggling activation — state is persisted in the database.
 
 ```typescript
 // plugins/my-plugin/plugin.ts
@@ -257,7 +263,15 @@ Two example plugins are included: `plugins/seo/` (meta tag injection) and `plugi
 
 ## Theme System
 
-Themes live in `themes/<name>/theme.json`. The active theme is stored in the `options` table and switchable from the admin. Three themes ship by default: `default`, `minimal`, `magazine`.
+Themes live in `themes/<name>/`. Each theme has a `theme.json` (metadata) and a `style.css` (CSS custom properties). The active theme is stored in the `options` table and switchable from the admin. Switching themes immediately changes the frontend's fonts, colors, and layout width.
+
+Three themes ship by default:
+
+| Theme | Description |
+|---|---|
+| `default` | Clean, readable — Georgia serif body, sans-serif headings, 780px width |
+| `minimal` | Stark monospace — Courier New throughout, narrow 640px width |
+| `magazine` | Editorial bold — Impact headings, red accent, wide 1100px layout |
 
 ```json
 // themes/my-theme/theme.json
@@ -270,69 +284,86 @@ Themes live in `themes/<name>/theme.json`. The active theme is stored in the `op
 }
 ```
 
+```css
+/* themes/my-theme/style.css */
+:root {
+  --theme-font-body: Georgia, serif;
+  --theme-font-heading: sans-serif;
+  --theme-color-accent: #2271b1;
+  --theme-max-width: 780px;
+  --theme-sidebar-width: 280px;
+}
+```
+
 ---
 
 ## REST API
 
-All endpoints at `/api/v1/` support standard CRUD. Authentication uses the same session cookie.
+All endpoints at `/api/v1/` support standard CRUD. Authentication uses the same session cookie. **Write endpoints require authentication**; GET endpoints are public.
 
-| Endpoint | Methods |
-|---|---|
-| `/api/v1/posts` | GET, POST |
-| `/api/v1/pages` | GET, POST |
-| `/api/v1/media` | GET, POST |
-| `/api/v1/comments` | GET, POST |
-| `/api/v1/users` | GET, POST |
-| `/api/v1/categories` | GET, POST |
-| `/api/v1/tags` | GET, POST |
-| `/api/upload` | POST (multipart file upload) |
+| Endpoint | Methods | Auth required |
+|---|---|---|
+| `/api/v1/posts` | GET, POST | POST: `edit_posts` |
+| `/api/v1/pages` | GET, POST | POST: `edit_pages` |
+| `/api/v1/media` | GET, PATCH, DELETE | PATCH/DELETE: `upload_files` |
+| `/api/v1/comments` | GET, POST | POST: public (guest comments → pending) |
+| `/api/v1/users` | GET, POST | GET+POST: `manage_users` |
+| `/api/v1/categories` | GET, POST | POST: `manage_categories` |
+| `/api/v1/tags` | GET, POST | POST: `manage_categories` |
+| `/api/upload` | POST | `upload_files` |
+| `/api/oembed` | GET | Public |
+
+---
+
+## Email Configuration
+
+In development, SveltePress automatically creates a free [ethereal.email](https://ethereal.email) test account. Email preview URLs are logged to the console — no configuration needed.
+
+For production, set these environment variables in `.env`:
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your@email.com
+SMTP_PASS=yourpassword
+SMTP_FROM=SveltePress <noreply@example.com>
+```
+
+Emails sent:
+- **Password reset** — triggered by forgot password form
+- **New comment notification** — sent to post author when a comment is submitted
 
 ---
 
 ## Known Issues & Incomplete Features
 
-This project is in active early development. The core content creation and management flow works end-to-end, but several areas are incomplete or have known bugs.
+The core content creation and management flow works end-to-end. The following items are partially implemented or have known limitations.
 
 ### Known Bugs
 
-- **Visibility selector defaults to "Password Protected"** — The Visibility combobox in the post editor sidebar shows "Password Protected" as the initial selected option instead of "Public" on new posts. The correct status is still submitted on publish.
+- **Hydration mismatch warning** — A `[svelte] hydration_mismatch` console warning appears on post edit pages. Does not affect functionality.
+- **Nested form warning** — The post edit page logs a `node_invalid_placement_ssr: <form>` error. Visual behavior is unaffected.
 
-- **Svelte comment nodes in block content** — `{@html}` inside contenteditable divs causes Svelte to insert `<!---->` anchor comment nodes into the block's stored HTML. These render invisibly in the browser but accumulate in the database content field over multiple edits.
-
-- **Hydration mismatch warning** — A `[svelte] hydration_mismatch` console warning appears on post edit pages. Does not affect functionality but indicates a server/client render discrepancy in the block editor.
-
-- **Nested form warning** — The post edit page logs a `node_invalid_placement_ssr: <form>` error from a nested form structure in the sidebar. Visual behavior is unaffected.
-
-### Incomplete / Stub Features
+### Incomplete Features
 
 | Feature | Status |
 |---|---|
-| **Forgot password email** | UI exists; token is logged to console only — no email is sent. Requires an SMTP integration. |
-| **Plugin activation** | The plugins admin page shows plugins and allows toggling, but plugins are always loaded from disk at startup regardless of activation state. Activation state is not persisted. |
-| **Theme templates** | The theme system switches the active theme in the database, but the frontend does not yet dynamically load per-theme Svelte components or CSS. All themes render with the same default frontend layout. |
-| **Widget drag-and-drop** | The widgets admin page renders widget areas and available widgets but drag-and-drop reordering is not fully wired to persistence. |
-| **Menu drag-and-drop** | The menus admin page has the UI for drag-and-drop reordering of menu items, but nested sub-items require manual parent assignment. |
-| **Date archive pages** | The `/[year]/[month]/` route is listed in the plan but not yet implemented. |
-| **oEmbed resolution** | The Embed block stores a URL but does not perform oEmbed discovery or fetch embed HTML from providers. |
-| **Columns block nesting** | The Columns block renders a two-column layout but does not support nested blocks inside each column. |
-| **Gallery lightbox** | Gallery block renders images in a grid but has no lightbox or modal viewer. |
-| **Comment threading UI** | Comments are stored with `parentId` for threading but the frontend renders them as a flat list. |
-| **Password-protected posts** | The `status` field supports `'private'` and password protection but the frontend does not enforce password gates. |
-| **User avatar upload** | The profile page shows the current Gravatar but does not support uploading a custom avatar. |
-| **Scheduled post indicator** | Posts with a future `postDate` are set to `status = 'future'` internally but the admin UI does not display a "Scheduled" status tab. |
-| **Media bulk delete** | The media library grid has checkboxes but bulk delete is not implemented. |
-| **Akismet / spam filtering** | The Akismet plugin stub exists but makes no real API calls. Comments go directly to pending without spam scoring. |
-| **Permalink structure enforcement** | The Permalinks settings page saves the chosen structure but the frontend router always uses `/[slug]` regardless of the setting. |
-| **Import validation** | WXR import parses and inserts content but does not validate for duplicate slugs or missing authors. |
-| **REST API authentication** | API endpoints read the session cookie but do not enforce authentication on write endpoints in all cases. |
-| **svelte-check type errors** | Several auto-generated admin pages have minor TypeScript errors that do not affect runtime behavior. |
+| **Password-protected posts** | `status='private'` is stored but the frontend does not enforce a password gate |
+| **Permalink structure enforcement** | Settings page saves the chosen structure but frontend always routes via `/[slug]` |
+| **Columns block nesting** | Columns block renders two columns but does not support nested blocks inside each column |
+| **Gallery lightbox** | Gallery block renders images in a grid but has no lightbox or modal viewer |
+| **User avatar upload** | Profile page shows Gravatar only; no custom avatar upload |
+| **Media bulk delete** | Checkboxes exist in the media library but bulk delete is not wired up |
+| **Scheduled post indicator** | Posts with a future date use `status='future'` internally but the admin UI has no "Scheduled" tab |
+| **Widget drag-and-drop** | Widget areas display correctly but drag-and-drop reordering is not fully persisted |
+| **Akismet / spam filtering** | The Akismet plugin stub exists but makes no real API calls |
+| **Import validation** | WXR import does not validate for duplicate slugs or missing authors |
 
 ### Not Yet Implemented
 
-- **Email notifications** — Comment notifications to post authors, new user registration emails
 - **Two-factor authentication**
 - **Activity log** — Admin audit trail
-- **Site health check** — Dashboard widget stub only
 - **Multisite** — Single-site only
 
 ---
@@ -343,23 +374,32 @@ This project is in active early development. The core content creation and manag
 svelte-press/
 ├── src/
 │   ├── lib/
-│   │   ├── components/blocks/   # 21 block editor components
+│   │   ├── components/
+│   │   │   ├── blocks/          # 21 block editor components
+│   │   │   └── Comment.svelte   # Recursive threaded comment component
 │   │   ├── server/
+│   │   │   ├── api/             # REST API auth helpers
 │   │   │   ├── auth/            # Session create/validate/delete
 │   │   │   ├── db/              # Drizzle schema, migrations, seed
+│   │   │   ├── email/           # nodemailer email service
 │   │   │   ├── media/           # sharp image processing
 │   │   │   ├── permissions/     # Role capabilities
 │   │   │   ├── plugins/         # Hook system + loader
 │   │   │   ├── scheduler/       # node-cron scheduled publishing
 │   │   │   └── themes/          # Theme loader
 │   │   └── utils.ts             # slugify, formatDate, truncate, etc.
+│   ├── params/
+│   │   ├── year.ts              # Route matcher for 4-digit years
+│   │   └── month.ts             # Route matcher for month numbers
 │   └── routes/
 │       ├── (admin)/sp-admin/    # All admin routes
 │       ├── (auth)/              # Login, register, forgot password
-│       ├── (frontend)/          # Public blog routes
-│       └── api/v1/              # REST API
+│       ├── (frontend)/          # Public blog routes (theme-aware)
+│       ├── api/v1/              # REST API
+│       ├── api/oembed/          # oEmbed proxy
+│       └── themes/[theme]/      # Theme CSS file server
 ├── plugins/                     # Plugin directory
-├── themes/                      # Theme directory
+├── themes/                      # Theme directory (default, minimal, magazine)
 ├── static/uploads/              # Media upload destination
 └── data/                        # SQLite database (gitignored)
 ```

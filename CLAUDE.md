@@ -6,10 +6,7 @@ License: MIT — Copyright A to Z Tech Innovations LLC (https://a2ztech.io)
 Feature-complete WordPress clone built with SvelteKit 2 + Svelte 5 + TypeScript.
 Admin routes use `sp-*` prefix (never `wp-*`).
 
-Git repo initialized. Two commits on `master`:
-- `a7b900a` — initial commit (full codebase)
-- `3663af6` — MIT license, README, A to Z Tech branding
-- `3076882` — fix domain to a2ztech.io
+Git repo on `master` — latest commit: `a5398c6`
 
 ---
 
@@ -23,6 +20,7 @@ Git repo initialized. Two commits on `master`:
 | Database | SQLite via `better-sqlite3` + Drizzle ORM |
 | Auth | Custom session table (nanoid tokens, HTTP-only cookies) |
 | Images | `sharp` for thumbnail generation |
+| Email | `nodemailer` (ethereal.email in dev, real SMTP via env vars in prod) |
 | Package manager | **pnpm** (never npm or bun) |
 | Deployment | `@sveltejs/adapter-node` |
 
@@ -70,20 +68,21 @@ All editable block components (Paragraph, Heading, Quote, Pullquote, Button) use
 
   // localContent only syncs from props when block.id changes (different block selected)
   // NOT on every keypress — prevents cursor reset and content duplication
-  let localContent = $state(block.content ?? '');
+  let localContent = $state((block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
   let prevId = $state(block.id);
 
   $effect(() => {
     const id = block.id;
     if (id !== prevId) {
       prevId = id;
-      localContent = untrack(() => block.content ?? '');
+      localContent = untrack(() => (block.content ?? '').replace(/<!--[\s\S]*?-->/g, ''));
     }
   });
 
   function handleInput(e: Event) {
     const target = e.target as HTMLElement;
-    onupdate({ ...block, content: target.innerHTML });
+    const clean = target.innerHTML.replace(/<!--[\s\S]*?-->/g, '');
+    onupdate({ ...block, content: clean });
   }
 </script>
 
@@ -91,6 +90,7 @@ All editable block components (Paragraph, Heading, Quote, Pullquote, Button) use
 ```
 
 **Never** put `{@html block.content}` directly in a contenteditable — it re-renders on every prop change.
+HTML comment stripping (`replace(/<!--[\s\S]*?-->/g, '')`) is required in all three places to prevent Svelte anchor nodes accumulating in stored content.
 
 ---
 
@@ -107,7 +107,7 @@ import { db } from '$lib/server/db/index.js';
 import { posts, users } from '$lib/server/db/schema.js';
 import { slugify } from '$lib/utils.js';
 import type { Post, User } from '$lib/types/index.js';
-import { eq, desc, count, and, or, like } from 'drizzle-orm';
+import { eq, desc, count, and, or, like, gte, lt, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 ```
@@ -144,6 +144,15 @@ import { count } from 'drizzle-orm';
 const [{ count: total }] = db.select({ count: count() }).from(posts).all();
 ```
 
+**Raw SQL** (for SQLite-specific functions like strftime):
+```ts
+import { sql } from 'drizzle-orm';
+const rows = db.all<{ year: string; month: string; count: number }>(sql`
+  SELECT strftime('%Y', post_date) as year, strftime('%m', post_date) as month, COUNT(*) as count
+  FROM posts WHERE status = 'publish' GROUP BY year, month ORDER BY year DESC, month DESC LIMIT 12
+`);
+```
+
 **Schema location**: `src/lib/server/db/schema.ts`
 **Exported tables**: `users`, `sessions`, `posts`, `terms`, `postTerms`, `comments`, `media`, `options`, `menus`, `menuItems`, `postMeta`, `userMeta`, `revisions`, `widgets`
 
@@ -170,6 +179,103 @@ Auth guard pattern for admin layout:
 // +layout.server.ts
 if (!locals.user) redirect(302, '/sp-login');
 ```
+
+---
+
+## REST API Auth
+
+All write endpoints use `requireAuth` / `requireCapability` from `$lib/server/api/auth.js`:
+
+```ts
+import { requireCapability } from '$lib/server/api/auth.js';
+
+export const POST: RequestHandler = async (event) => {
+  const authError = requireCapability(event, 'edit_posts');
+  if (authError) return authError; // returns 401 or 403 Response
+  // ...
+};
+```
+
+GET endpoints remain public. Comments POST allows unauthenticated guests (pending status).
+
+---
+
+## Email
+
+Email service at `src/lib/server/email/index.ts`:
+
+```ts
+import { sendEmail } from '$lib/server/email/index.js';
+
+const result = await sendEmail({
+  to: 'user@example.com',
+  subject: 'Hello',
+  html: '<p>Hello</p>',
+  text: 'Hello',
+});
+// result.previewUrl — set in dev (ethereal.email), undefined in prod
+```
+
+- **Dev** (no `SMTP_HOST`): auto-creates ethereal.email test account, logs preview URL to console
+- **Prod**: set `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` in `.env`
+- Email failures are caught and returned — never throw from `sendEmail`
+
+---
+
+## Plugin System
+
+WordPress-style hooks, singleton in `src/lib/server/plugins/hooks.ts`:
+
+```ts
+import { hooks } from '$lib/server/plugins/hooks.js';
+
+hooks.addAction('save_post', async (post) => { /* ... */ }, 10);
+await hooks.doAction('save_post', post);
+
+hooks.addFilter('the_content', async (content) => content.trim(), 10);
+const filtered = await hooks.applyFilters('the_content', rawContent);
+```
+
+Plugins live in `plugins/<slug>/plugin.ts`.
+Active plugins stored in `options.active_plugins` as JSON array of slugs.
+Loader reads `active_plugins` at server startup and only loads active plugins.
+Default: all discovered plugins on disk are active on fresh install.
+
+---
+
+## Theme System
+
+Themes live in `themes/<slug>/`. Each theme has:
+- `theme.json` — metadata (name, version, description, author, screenshot)
+- `style.css` — CSS custom properties defining the theme's visual variables
+
+Active theme stored in `options.active_theme`. Frontend layout dynamically loads:
+`<link rel="stylesheet" href="/themes/<slug>/style.css">` served by `src/routes/themes/[theme]/style.css/+server.ts`.
+
+```ts
+import { getActiveTheme, getThemeList, setActiveTheme, getActiveThemeStyleUrl } from '$lib/server/themes/index.js';
+```
+
+Three built-in themes: `default` (clean Georgia serif), `minimal` (monospace, narrow), `magazine` (Impact headings, red accent, wide).
+
+Frontend layout uses `var(--theme-*)` CSS custom properties — switching themes changes fonts, colors, and layout width immediately.
+
+---
+
+## Date Archives
+
+Route: `src/routes/(frontend)/[year=year]/[month=month]/`
+Param matchers in `src/params/year.ts` (4-digit) and `src/params/month.ts` (1-12) prevent conflicts with `[slug]`.
+Archive months shown in sidebar Archives widget (queried in frontend layout load).
+
+---
+
+## oEmbed
+
+Server endpoint: `GET /api/oembed?url=<encoded-url>`
+Supports: YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok.
+Returns oEmbed JSON or `{ error }` with appropriate HTTP status.
+EmbedBlock stores `embedHtml` in `block.attrs.embedHtml` after fetch. Frontend renders stored HTML.
 
 ---
 
@@ -230,16 +336,19 @@ src/routes/
 │           ├── media/
 │           └── permalinks/
 ├── (frontend)/                 # public theme-aware routes
-│   ├── +layout.svelte          # loads active theme CSS
+│   ├── +layout.svelte          # injects active theme CSS link
 │   ├── +page.svelte            # blog home
 │   ├── [slug]/                 # post or page
+│   ├── [year=year]/[month=month]/  # date archives
 │   ├── category/[slug]/
 │   ├── tag/[slug]/
 │   ├── author/[username]/
 │   └── search/
-└── api/v1/                     # REST API
-    ├── posts/, pages/, media/, comments/, users/, categories/, tags/
-    └── ../upload/              # multipart file upload
+├── api/
+│   ├── v1/posts/, pages/, media/, comments/, users/, categories/, tags/
+│   ├── upload/                 # multipart file upload
+│   └── oembed/                 # oEmbed proxy endpoint
+└── themes/[theme]/style.css/   # serves theme CSS from filesystem
 ```
 
 **NEVER create** `wp-admin`, `wp-login.php`, or any `wp-*` routes.
@@ -280,38 +389,13 @@ Color variables (CSS custom properties in `:root`):
 --sp-content-bg: #f0f0f1
 ```
 
----
-
-## Plugin System
-
-WordPress-style hooks, singleton in `src/lib/server/plugins/hooks.ts`:
-
-```ts
-import { hooks } from '$lib/server/plugins/hooks.js';
-
-hooks.addAction('save_post', async (post) => { /* ... */ }, 10);
-await hooks.doAction('save_post', post);
-
-hooks.addFilter('the_content', async (content) => content.trim(), 10);
-const filtered = await hooks.applyFilters('the_content', rawContent);
+Theme CSS variables (set by active theme's `style.css`):
 ```
-
-Plugins live in `plugins/<slug>/plugin.ts`.
-Plugin activation stored in `options.active_plugins` as JSON array of slugs.
-**Known gap**: activation state not currently respected at load time — all plugins in `plugins/` always load.
-
----
-
-## Theme System
-
-Themes live in `themes/<slug>/theme.json`. Active theme stored in `options.active_theme`.
-
-```ts
-import { getActiveTheme, getThemeList, setActiveTheme } from '$lib/server/themes/index.js';
+--theme-font-body, --theme-font-heading
+--theme-color-bg, --theme-color-surface, --theme-color-text, --theme-color-muted
+--theme-color-accent, --theme-color-border
+--theme-max-width, --theme-sidebar-width
 ```
-
-Three built-in themes: `default`, `minimal`, `magazine`.
-**Known gap**: frontend always uses same layout regardless of active theme — theme CSS/components not yet dynamically loaded.
 
 ---
 
@@ -369,6 +453,8 @@ requireCap(user.role, 'manage_options') // throws if not allowed
 
 Roles: `admin > editor > author > contributor > subscriber`
 
+REST API uses `requireCapability(event, cap)` from `$lib/server/api/auth.js` which returns a Response (not throws).
+
 ---
 
 ## Commands
@@ -390,51 +476,50 @@ Default login: **admin / password** at `http://localhost:5173/sp-login`
 
 ## Current Status — What's Done ✅
 
-All phases are complete and working end-to-end:
+All features are complete and working end-to-end:
 
-- **Auth** — login, register, forgot-password, session middleware
+- **Auth** — login, register, forgot-password (sends real email via nodemailer/ethereal), session middleware
 - **Admin layout** — dark sidebar, adminbar, all nav, logout
 - **Dashboard** — stats, quick draft, recent activity, welcome panel
-- **Posts & Pages CRUD** — list, new, edit (with block editor), trash/delete
-- **Block editor** — 21 block types (paragraph, heading H1-H6, image, gallery, video, quote, pullquote, code, preformatted, list, separator, spacer, table, columns, button, embed, html, shortcode), toolbar, inserter
+- **Posts & Pages CRUD** — list, new, edit (with block editor), trash/delete, visibility selector fixed
+- **Block editor** — 21 block types, toolbar, inserter; contenteditable duplication bug fixed; HTML comment stripping
+- **Embed block** — oEmbed fetch via `/api/oembed` for YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok
 - **Media library** — grid/list, drag-and-drop upload, attachment detail/edit, sharp resizing
-- **Comments** — moderation table, status tabs, approve/spam/trash bulk actions
+- **Comments** — moderation table, status tabs, approve/spam/trash bulk actions, threaded display with Reply UI on frontend
+- **Comment notifications** — post author emailed on new comment (fire-and-forget, dev uses ethereal preview)
 - **Categories & Tags** — split-panel add/edit/delete
 - **Users** — list with role tabs, new/edit, role management
 - **Settings** — all 6 settings pages (general, reading, writing, discussion, media, permalinks)
 - **Menus builder** — tab panels for pages/posts/custom links/categories, up/down reorder
 - **Widgets** — areas + available widgets display
-- **Themes admin** — card grid, activate, details modal
-- **Plugins admin** — table, toggle activate/deactivate
+- **Themes admin** — card grid, activate, details modal; **frontend actually loads per-theme CSS** (default/minimal/magazine)
+- **Plugins admin** — table, toggle activate/deactivate; **activation state persisted** in options table and respected at load
 - **Profile** — name, bio, contact, password, avatar display
 - **Revisions** — slider, side-by-side diff, restore
 - **Tools** — WXR export and import
-- **Public frontend** — blog home, single post/page, category, tag, author, search archives
-- **REST API** — /api/v1/ for posts, pages, media, comments, users, categories, tags, upload
+- **Public frontend** — blog home, single post/page, category, tag, author, search, **date archives** (`/[year]/[month]/`)
+- **REST API** — `/api/v1/` for posts, pages, media, comments, users, categories, tags, upload; **all write endpoints auth-guarded**
 
 ---
 
 ## Known Issues / Bugs
 
-1. **Visibility selector** — defaults to "Password Protected" in new post editor sidebar (cosmetic, correct status still submitted)
-2. **`<!---->` in block content** — Svelte anchor comment nodes accumulate in stored HTML from `{@html}` inside contenteditable; renders invisibly but is present in DB
-3. **Hydration mismatch warning** — console warning on post edit pages; no functional impact
-4. **Nested form SSR warning** — `node_invalid_placement_ssr: <form>` on post edit page; no functional impact
+1. **Hydration mismatch warning** — console warning on post edit pages; no functional impact
+2. **Nested form SSR warning** — `node_invalid_placement_ssr: <form>` on post edit page; no functional impact
 
-## Incomplete Features
+## Remaining Incomplete Features
 
-- **Theme frontend** — switching themes does nothing visually; all themes render same layout
-- **Plugin activation** — toggle exists in admin but load always reads from filesystem, ignores activation state
-- **Comment threading UI** — stored with `parentId` but frontend renders flat
-- **Password-protected posts** — no frontend gate
-- **Date archives** — `/[year]/[month]/` route not implemented
-- **oEmbed** — Embed block stores URL only, no oEmbed fetch
-- **Columns nesting** — Columns block doesn't support nested blocks
-- **Email** — forgot password shows token in flash only; no SMTP
-- **User avatar upload** — shows Gravatar only
+- **Password-protected posts** — `status='private'` stored but frontend has no password gate
+- **Columns block nesting** — Columns block doesn't support nested blocks inside each column
+- **Gallery lightbox** — Gallery renders images in a grid but has no lightbox/modal viewer
+- **User avatar upload** — shows Gravatar only; no custom avatar upload
 - **Permalink structure** — settings saved but frontend always uses `/[slug]`
-- **REST API auth** — session cookie read but write endpoints not consistently guarded
-- **Media bulk delete** — checkboxes exist, action not wired
+- **Media bulk delete** — checkboxes exist in media library but bulk delete not wired
+- **Scheduled post indicator** — `status='future'` stored but admin UI has no "Scheduled" status tab
+- **Widget drag-and-drop persistence** — widget areas render but reordering not fully persisted
+- **Two-factor authentication** — not implemented
+- **Activity log** — admin audit trail not implemented
+- **Multisite** — single-site only
 
 ---
 
@@ -445,10 +530,12 @@ All phases are complete and working end-to-end:
 3. **Drizzle sync reads**: `.all()` and `.get()` are synchronous — do NOT `await` them.
 4. **Drizzle async writes**: `insert`/`update`/`delete` must be `await`ed.
 5. **ESM imports**: Always use `.js` extension even on TypeScript source files.
-6. **Layout actions**: `+layout.server.ts` cannot export `actions` — put actions in `+page.server.ts` or dedicated routes (e.g., `/sp-admin/logout`).
+6. **Layout actions**: `+layout.server.ts` cannot export `actions` — put actions in `+page.server.ts` or dedicated routes.
 7. **`$props()` typing**: `let { data }: { data: PageData } = $props()` — NOT `$props<{ data: PageData }>()`.
 8. **Tailwind v4**: No `tailwind.config.ts` needed. `@import 'tailwindcss'` in `app.css`. `@tailwindcss/vite` plugin in `vite.config.ts`.
 9. **Native modules**: `better-sqlite3` and `sharp` require `pnpm rebuild` after fresh install.
 10. **No root page**: `src/routes/+page.server.ts` and `src/routes/+page.svelte` must NOT exist — `(frontend)/+page.svelte` owns `/`.
-11. **contenteditable blocks**: Always use the `untrack()` + `localContent` pattern. Never bind `{@html block.content}` directly in a contenteditable.
+11. **contenteditable blocks**: Always use the `untrack()` + `localContent` pattern with HTML comment stripping. Never bind `{@html block.content}` directly.
 12. **Slug effect**: Always use `slugManuallyEdited` flag in post/page editors. Never `if (title && !slug)`.
+13. **Date archive routes**: `[year=year]/[month=month]` — matchers in `src/params/` are required to avoid conflicting with `[slug]`.
+14. **Theme CSS**: Served from filesystem via `src/routes/themes/[theme]/style.css/+server.ts` — not from `static/`.
