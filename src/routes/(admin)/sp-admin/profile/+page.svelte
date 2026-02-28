@@ -17,6 +17,34 @@
 	let submitting = $state(false);
 	let avatarSubmitting = $state(false);
 
+	// 2FA state
+	let totpEnabled = $state(data.totpEnabled);
+	let show2faSetup = $state(false);
+	let showDisableForm = $state(false);
+	let twoFaSubmitting = $state(false);
+
+	// When setup2fa succeeds, form.setup2fa holds the QR data
+	let setupData = $derived(
+		form && 'setup2fa' in form && form.setup2fa ? form.setup2fa : null
+	);
+
+	// When verify2fa succeeds, form.totpEnabled is true and form.backupCodes has the codes
+	let backupCodes = $derived(
+		form && 'backupCodes' in form && Array.isArray(form.backupCodes) ? form.backupCodes : null
+	);
+
+	// When 2FA is newly enabled, show the enabled state
+	$effect(() => {
+		if (form && 'totpEnabled' in form && form.totpEnabled) {
+			totpEnabled = true;
+			show2faSetup = false;
+		}
+		if (form && 'totpDisabled' in form && form.totpDisabled) {
+			totpEnabled = false;
+			showDisableForm = false;
+		}
+	});
+
 	// Preview selected avatar file before upload
 	let avatarPreviewUrl = $state<string | null>(null);
 
@@ -263,3 +291,212 @@
 		{submitting ? 'Saving…' : 'Update Profile'}
 	</button>
 </form>
+
+<!-- Two-Factor Authentication card (outside main form) -->
+<div class="sp-card" style="margin-top:24px;max-width:600px;">
+	<div class="sp-card-header">
+		<h2 class="sp-card-title">Two-Factor Authentication</h2>
+	</div>
+	<div class="sp-card-body">
+
+		{#if form?.totpError}
+			<div class="sp-notice sp-notice-error" style="margin-bottom:16px;">{form.totpError}</div>
+		{/if}
+		{#if form?.disableError}
+			<div class="sp-notice sp-notice-error" style="margin-bottom:16px;">{form.disableError}</div>
+		{/if}
+
+		{#if totpEnabled && backupCodes}
+			<!-- Just enabled — show backup codes once -->
+			<div class="sp-notice sp-notice-success" style="margin-bottom:16px;">
+				Two-factor authentication has been enabled successfully.
+			</div>
+			<div style="margin-bottom:16px;">
+				<p style="font-weight:600;margin-bottom:8px;">Save your backup codes</p>
+				<p style="font-size:13px;color:var(--sp-text-muted);margin-bottom:12px;">
+					These codes can be used to sign in if you lose access to your authenticator app.
+					Each code can only be used once. Store them somewhere safe — they will not be shown again.
+				</p>
+				<div style="background:#f0f0f1;border:1px solid var(--sp-border);border-radius:4px;padding:16px;font-family:monospace;font-size:14px;">
+					{#each backupCodes as code}
+						<div style="margin-bottom:4px;">{code}</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		{#if totpEnabled && !backupCodes}
+			<!-- 2FA is active -->
+			<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+				<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:var(--sp-success);border-radius:50%;color:#fff;font-size:12px;font-weight:700;">✓</span>
+				<span style="font-weight:600;color:var(--sp-success);">Two-factor authentication is enabled</span>
+			</div>
+			<p style="font-size:13px;color:var(--sp-text-muted);margin-bottom:16px;">
+				Your account is protected with TOTP two-factor authentication. You will be asked for a code from your authenticator app each time you log in.
+			</p>
+
+			{#if !showDisableForm}
+				<button
+					type="button"
+					class="sp-btn sp-btn-danger sp-btn-sm"
+					onclick={() => { showDisableForm = true; }}
+				>
+					Disable 2FA
+				</button>
+			{:else}
+				<form
+					method="POST"
+					action="?/disable2fa"
+					use:enhance={() => {
+						twoFaSubmitting = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							twoFaSubmitting = false;
+						};
+					}}
+				>
+					<p style="font-size:13px;font-weight:600;margin-bottom:12px;">Confirm to disable two-factor authentication:</p>
+					<div class="sp-field" style="margin-bottom:12px;">
+						<label class="sp-label" for="disablePassword">Current Password</label>
+						<input
+							type="password"
+							id="disablePassword"
+							name="disablePassword"
+							class="sp-input"
+							autocomplete="current-password"
+							required
+							placeholder="Your account password"
+						/>
+					</div>
+					<div class="sp-field" style="margin-bottom:16px;">
+						<label class="sp-label" for="disableCode">Authentication Code</label>
+						<input
+							type="text"
+							id="disableCode"
+							name="disableCode"
+							class="sp-input"
+							inputmode="numeric"
+							maxlength="10"
+							autocomplete="one-time-code"
+							required
+							placeholder="6-digit code or backup code"
+						/>
+					</div>
+					<div style="display:flex;gap:8px;">
+						<button type="submit" class="sp-btn sp-btn-danger sp-btn-sm" disabled={twoFaSubmitting}>
+							{twoFaSubmitting ? 'Disabling…' : 'Confirm Disable'}
+						</button>
+						<button
+							type="button"
+							class="sp-btn sp-btn-secondary sp-btn-sm"
+							onclick={() => { showDisableForm = false; }}
+						>
+							Cancel
+						</button>
+					</div>
+				</form>
+			{/if}
+
+		{:else if !totpEnabled}
+			<!-- 2FA is not enabled -->
+			<p style="font-size:13px;color:var(--sp-text-muted);margin-bottom:16px;">
+				Two-factor authentication adds an extra layer of security to your account. When enabled, you will need to enter a code from your authenticator app (such as Google Authenticator or Authy) each time you log in.
+			</p>
+
+			{#if !show2faSetup && !setupData}
+				<form
+					method="POST"
+					action="?/setup2fa"
+					use:enhance={() => {
+						twoFaSubmitting = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							twoFaSubmitting = false;
+							show2faSetup = true;
+						};
+					}}
+				>
+					<button type="submit" class="sp-btn sp-btn-primary" disabled={twoFaSubmitting}>
+						{twoFaSubmitting ? 'Generating…' : 'Enable Two-Factor Authentication'}
+					</button>
+				</form>
+			{/if}
+
+			{#if setupData}
+				<!-- QR code setup step -->
+				<div style="margin-bottom:20px;">
+					<p style="font-weight:600;margin-bottom:8px;">Step 1: Scan the QR code</p>
+					<p style="font-size:13px;color:var(--sp-text-muted);margin-bottom:12px;">
+						Open your authenticator app (Google Authenticator, Authy, 1Password, etc.) and scan this QR code.
+					</p>
+					<div style="display:inline-block;padding:12px;background:#fff;border:1px solid var(--sp-border);border-radius:4px;margin-bottom:12px;">
+						<img src={setupData.qrDataUrl} alt="TOTP QR Code" width="200" height="200" />
+					</div>
+					<p style="font-size:12px;color:var(--sp-text-muted);margin-bottom:4px;">
+						Can't scan the QR code? Enter this secret manually:
+					</p>
+					<code style="display:block;background:#f0f0f1;border:1px solid var(--sp-border);border-radius:4px;padding:8px 12px;font-size:13px;font-family:monospace;word-break:break-all;margin-bottom:20px;">
+						{setupData.secretBase32}
+					</code>
+
+					<p style="font-weight:600;margin-bottom:8px;">Step 2: Verify the code</p>
+					<p style="font-size:13px;color:var(--sp-text-muted);margin-bottom:12px;">
+						Enter the 6-digit code from your authenticator app to confirm setup.
+					</p>
+
+					<form
+						method="POST"
+						action="?/verify2fa"
+						use:enhance={() => {
+							twoFaSubmitting = true;
+							return async ({ update }) => {
+								await update({ reset: false });
+								twoFaSubmitting = false;
+							};
+						}}
+					>
+						<div style="display:flex;gap:8px;align-items:flex-end;max-width:280px;">
+							<div class="sp-field" style="flex:1;margin-bottom:0;">
+								<label class="sp-label" for="verifyCode">Verification Code</label>
+								<input
+									type="text"
+									id="verifyCode"
+									name="code"
+									class="sp-input"
+									inputmode="numeric"
+									pattern="\d{6}"
+									maxlength="6"
+									required
+									autofocus
+									placeholder="000000"
+									style="letter-spacing:0.15em;text-align:center;font-size:1.1rem;"
+								/>
+							</div>
+							<button type="submit" class="sp-btn sp-btn-primary" disabled={twoFaSubmitting} style="margin-bottom:0;flex-shrink:0;">
+								{twoFaSubmitting ? 'Verifying…' : 'Verify & Enable'}
+							</button>
+						</div>
+					</form>
+
+					<div style="margin-top:12px;">
+						<form
+							method="POST"
+							action="?/setup2fa"
+							use:enhance={() => {
+								twoFaSubmitting = true;
+								return async ({ update }) => {
+									await update({ reset: false });
+									twoFaSubmitting = false;
+								};
+							}}
+						>
+							<button type="submit" class="sp-btn sp-btn-secondary sp-btn-sm" disabled={twoFaSubmitting}>
+								Generate new QR code
+							</button>
+						</form>
+					</div>
+				</div>
+			{/if}
+		{/if}
+	</div>
+</div>

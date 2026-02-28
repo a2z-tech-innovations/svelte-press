@@ -1,11 +1,50 @@
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { posts, users, postTerms, terms, comments } from '$lib/server/db/schema.js';
+import { posts, users, postTerms, terms, comments, options } from '$lib/server/db/schema.js';
 import { eq, desc, and, count, sql } from 'drizzle-orm';
+import { getPermalinkUrl } from '$lib/utils.js';
 
 const PER_PAGE = 10;
 
 export const load: PageServerLoad = async ({ url }) => {
+	// Handle ?p=<id> — supports the "plain" permalink structure
+	// When ?p=<id> is in the URL, redirect to the canonical permalink for the post.
+	// For plain structure ('' empty), /archives/<id> is the numeric fallback.
+	const pParam = url.searchParams.get('p');
+	if (pParam) {
+		const id = parseInt(pParam, 10);
+		if (!isNaN(id) && id > 0) {
+			const post = db
+				.select({ id: posts.id, slug: posts.slug, postDate: posts.postDate, status: posts.status, postType: posts.postType })
+				.from(posts)
+				.where(and(eq(posts.id, id), eq(posts.status, 'publish'), eq(posts.postType, 'post')))
+				.get();
+
+			if (post) {
+				const permalinkOpt = db
+					.select({ optionValue: options.optionValue })
+					.from(options)
+					.where(eq(options.optionName, 'permalink_structure'))
+					.get();
+
+				const structure = permalinkOpt?.optionValue ?? '/%postname%/';
+
+				// For plain structure: redirect to numeric archives page which always works
+				if (structure === '') {
+					redirect(302, `/archives/${post.id}`);
+				}
+
+				// For all other structures, redirect to the canonical permalink URL
+				const canonicalPath = getPermalinkUrl(
+					{ id: post.id, slug: post.slug, postDate: post.postDate },
+					structure
+				);
+				redirect(301, canonicalPath);
+			}
+		}
+	}
+
 	const page = Math.max(1, Number(url.searchParams.get('page') ?? '1'));
 	const offset = (page - 1) * PER_PAGE;
 

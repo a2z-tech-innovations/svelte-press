@@ -61,19 +61,6 @@
 				}
 				return '';
 			}
-			case 'columns': {
-				type NestedBlock = { id?: string; type: string; content: string; attrs: Record<string, unknown> };
-				const leftBlocks = (block.attrs.leftBlocks as NestedBlock[]) ?? [];
-				const rightBlocks = (block.attrs.rightBlocks as NestedBlock[]) ?? [];
-				const colCount = Number(block.attrs.columns ?? 2);
-				const renderCol = (blocks: NestedBlock[]) => blocks.map((b) => renderBlock(b)).join('');
-				return (
-					'<div class="sp-columns-wrap" style="grid-template-columns: repeat(' + colCount + ', 1fr)">' +
-					'<div class="sp-column">' + renderCol(leftBlocks) + '</div>' +
-					'<div class="sp-column">' + renderCol(rightBlocks) + '</div>' +
-					'</div>'
-				);
-			}
 			default:
 				return block.content ? '<p>' + block.content + '</p>' : '';
 		}
@@ -89,10 +76,9 @@
 			.join('\n');
 	}
 
-	let renderedContent = $derived(renderBlocks(data.post.content));
+	let renderedContent = $derived(renderBlocks(data.post.content as unknown[]));
 	let isPost = $derived(data.post.postType === 'post');
 
-	// Collect gallery blocks so GalleryLightbox can access image data
 	let galleryBlocks = $derived(
 		Array.isArray(data.post.content)
 			? (data.post.content as Array<{ id: string; type: string; attrs: Record<string, unknown> }>).filter(
@@ -122,7 +108,6 @@
 	function handleReply(id: number, name: string) {
 		replyToId = id;
 		replyToName = name;
-		// Scroll to the comment form
 		const el = document.getElementById('comment-form');
 		if (el) {
 			el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -134,7 +119,6 @@
 		replyToName = null;
 	}
 
-	// Use commentTree if available, fall back gracefully
 	let commentTree = $derived(data.commentTree ?? []);
 </script>
 
@@ -145,27 +129,6 @@
 	{/if}
 </svelte:head>
 
-{#if data.passwordRequired}
-	<article class="fp-single">
-		<header class="fp-single-header">
-			<h1 class="fp-single-title">{data.post.title || '(Untitled)'}</h1>
-		</header>
-		<div class="sp-password-gate">
-			<h2 class="sp-password-gate-title">Protected Content</h2>
-			<p class="sp-password-gate-desc">This content is password protected. Enter the password to view it.</p>
-			{#if form?.passwordError}
-				<div class="sp-notice sp-notice-error" style="margin-bottom:16px">{form.passwordError}</div>
-			{/if}
-			<form method="POST" action="?/unlock" use:enhance>
-				<div class="sp-field">
-					<label class="sp-label" for="password">Password</label>
-					<input class="sp-input" type="password" name="password" id="password" required autocomplete="current-password" />
-				</div>
-				<button type="submit" class="sp-btn sp-btn-primary" style="margin-top:12px">Enter</button>
-			</form>
-		</div>
-	</article>
-{:else}
 <article class="fp-single">
 	<header class="fp-single-header">
 		<h1 class="fp-single-title">{data.post.title || '(Untitled)'}</h1>
@@ -229,7 +192,6 @@
 	{/if}
 </article>
 
-<!-- Lightbox for gallery blocks — mounts outside article to avoid z-index issues -->
 {#if galleryBlocks.length > 0}
 	<GalleryLightbox galleries={galleryBlocks} />
 {/if}
@@ -341,386 +303,67 @@
 		{/if}
 	</section>
 {/if}
-{/if}
 
 <style>
-	/* ── Single post ── */
-	.fp-single {
-		max-width: 720px;
-	}
-
-	.fp-single-header {
-		margin-bottom: 2rem;
-		padding-bottom: 1.5rem;
-		border-bottom: 1px solid #e8e8e8;
-	}
-
-	.fp-single-title {
-		font-family: 'Playfair Display', Georgia, serif;
-		font-size: 2.25rem;
-		font-weight: 700;
-		line-height: 1.2;
-		letter-spacing: -0.03em;
-		color: #1d2327;
-		margin-bottom: 0.75rem;
-	}
-
-	.fp-single-meta {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 0.25rem;
-		font-size: 0.8125rem;
-		color: #646970;
-	}
-
-	.fp-single-date {
-		color: #646970;
-	}
-
-	.fp-meta-sep {
-		color: #c3c4c7;
-	}
-
-	.fp-single-author {
-		color: #646970;
-		text-decoration: none;
-	}
-
-	.fp-single-author:hover {
-		color: #2271b1;
-	}
-
-	.fp-cat-link {
-		color: #646970;
-		text-decoration: none;
-	}
-
-	.fp-cat-link:hover {
-		color: #2271b1;
-	}
-
-	/* ── Content ── */
-	.fp-single-content {
-		line-height: 1.8;
-		color: #1d2327;
-	}
-
-	.fp-single-content :global(p) {
-		margin-bottom: 1.5rem;
-	}
-
-	.fp-single-content :global(h1),
-	.fp-single-content :global(h2),
-	.fp-single-content :global(h3),
-	.fp-single-content :global(h4),
-	.fp-single-content :global(h5),
-	.fp-single-content :global(h6) {
-		font-family: 'Playfair Display', Georgia, serif;
-		font-weight: 700;
-		line-height: 1.3;
-		margin: 2rem 0 0.75rem;
-		color: #1d2327;
-	}
-
+	.fp-single { max-width: 720px; }
+	.fp-single-header { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid #e8e8e8; }
+	.fp-single-title { font-family: 'Playfair Display', Georgia, serif; font-size: 2.25rem; font-weight: 700; line-height: 1.2; letter-spacing: -0.03em; color: #1d2327; margin-bottom: 0.75rem; }
+	.fp-single-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem; font-size: 0.8125rem; color: #646970; }
+	.fp-single-date { color: #646970; }
+	.fp-meta-sep { color: #c3c4c7; }
+	.fp-single-author { color: #646970; text-decoration: none; }
+	.fp-single-author:hover { color: #2271b1; }
+	.fp-cat-link { color: #646970; text-decoration: none; }
+	.fp-cat-link:hover { color: #2271b1; }
+	.fp-single-content { line-height: 1.8; color: #1d2327; }
+	.fp-single-content :global(p) { margin-bottom: 1.5rem; }
+	.fp-single-content :global(h1),.fp-single-content :global(h2),.fp-single-content :global(h3),.fp-single-content :global(h4),.fp-single-content :global(h5),.fp-single-content :global(h6) { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; line-height: 1.3; margin: 2rem 0 0.75rem; color: #1d2327; }
 	.fp-single-content :global(h2) { font-size: 1.6rem; letter-spacing: -0.02em; }
 	.fp-single-content :global(h3) { font-size: 1.3rem; }
 	.fp-single-content :global(h4) { font-size: 1.1rem; }
-
-	.fp-single-content :global(blockquote) {
-		border-left: 3px solid #1d2327;
-		padding-left: 1.25rem;
-		margin: 1.5rem 0;
-		color: #3c434a;
-		font-style: italic;
-		font-size: 1.05rem;
-	}
-
-	.fp-single-content :global(pre) {
-		background: #f6f7f7;
-		border: 1px solid #e8e8e8;
-		border-radius: 4px;
-		padding: 1rem 1.25rem;
-		overflow-x: auto;
-		margin-bottom: 1.5rem;
-		font-size: 0.875rem;
-	}
-
-	.fp-single-content :global(code) {
-		font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
-		font-size: 0.875em;
-	}
-
-	.fp-single-content :global(ul),
-	.fp-single-content :global(ol) {
-		margin-bottom: 1.5rem;
-		padding-left: 1.5rem;
-	}
-
-	.fp-single-content :global(li) {
-		margin-bottom: 0.25rem;
-	}
-
-	.fp-single-content :global(figure) {
-		margin: 1.5rem 0;
-	}
-
-	.fp-single-content :global(figure img) {
-		border-radius: 4px;
-		width: 100%;
-	}
-
-	.fp-single-content :global(hr) {
-		border: none;
-		border-top: 1px solid #e8e8e8;
-		margin: 2rem 0;
-	}
-
-	.fp-single-content :global(a) {
-		color: #2271b1;
-	}
-
-	/* ── Columns block (frontend) ── */
-	.fp-single-content :global(.sp-columns-wrap) {
-		display: grid;
-		gap: 2rem;
-		margin-bottom: 1.5rem;
-	}
-
-	.fp-single-content :global(.sp-column > *:last-child) {
-		margin-bottom: 0;
-	}
-
-	/* ── Post footer / tags ── */
-	.fp-single-footer {
-		margin-top: 2rem;
-		padding-top: 1.5rem;
-		border-top: 1px solid #e8e8e8;
-	}
-
-	.fp-tags {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.fp-tags-label {
-		font-size: 0.8125rem;
-		color: #646970;
-		font-weight: 500;
-	}
-
-	.fp-tag {
-		display: inline-block;
-		padding: 0.2rem 0.6rem;
-		border: 1px solid #c3c4c7;
-		border-radius: 2rem;
-		font-size: 0.75rem;
-		color: #646970;
-		text-decoration: none;
-		transition: border-color 0.15s, color 0.15s;
-	}
-
-	.fp-tag:hover {
-		border-color: #2271b1;
-		color: #2271b1;
-	}
-
-	/* ── Author box ── */
-	.fp-author-box {
-		display: flex;
-		gap: 1.25rem;
-		align-items: flex-start;
-		margin-top: 2.5rem;
-		padding: 1.5rem;
-		background: #f6f7f7;
-		border-radius: 6px;
-	}
-
-	.fp-author-avatar {
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.fp-author-name {
-		display: block;
-		font-family: 'Playfair Display', Georgia, serif;
-		font-size: 1rem;
-		font-weight: 700;
-		color: #1d2327;
-		text-decoration: none;
-		margin-bottom: 0.25rem;
-	}
-
-	.fp-author-name:hover {
-		color: #2271b1;
-	}
-
-	.fp-author-bio {
-		font-size: 0.875rem;
-		color: #3c434a;
-		line-height: 1.6;
-	}
-
-	/* ── Comments ── */
-	.fp-comments {
-		max-width: 720px;
-		margin-top: 3rem;
-		padding-top: 2rem;
-		border-top: 2px solid #1d2327;
-	}
-
-	.fp-comments-title {
-		font-family: 'Playfair Display', Georgia, serif;
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: #1d2327;
-		margin-bottom: 1.5rem;
-	}
-
-	.fp-comment-list {
-		padding: 0;
-		margin-bottom: 2rem;
-	}
-
-	.fp-comments-closed {
-		font-size: 0.875rem;
-		color: #646970;
-		font-style: italic;
-	}
-
-	/* ── Comment form ── */
-	.fp-comment-form-wrap {
-		margin-top: 2rem;
-	}
-
-	.fp-reply-indicator {
-		background: #f0f0f1;
-		border-left: 3px solid #2271b1;
-		padding: 8px 12px;
-		font-size: 0.8125rem;
-		margin-bottom: 12px;
-		border-radius: 0 4px 4px 0;
-		color: #3c434a;
-	}
-
-	.fp-cancel-reply {
-		background: none;
-		border: none;
-		padding: 0;
-		color: #2271b1;
-		cursor: pointer;
-		font-size: 0.8125rem;
-		font-family: inherit;
-		text-decoration: underline;
-	}
-
-	.fp-cancel-reply:hover {
-		color: #d63638;
-	}
-
-	.fp-comment-form-title {
-		font-family: 'Playfair Display', Georgia, serif;
-		font-size: 1.25rem;
-		font-weight: 700;
-		margin-bottom: 1.25rem;
-	}
-
-	.fp-notice {
-		padding: 0.875rem 1rem;
-		border-radius: 4px;
-		font-size: 0.875rem;
-		margin-bottom: 1rem;
-	}
-
-	.fp-notice--success {
-		background: #edfaef;
-		border: 1px solid #00a32a;
-		color: #004a12;
-	}
-
-	.fp-notice--error {
-		background: #fceaea;
-		border: 1px solid #d63638;
-		color: #6d0d0f;
-	}
-
-	.fp-form-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-	}
-
-	.fp-form-field {
-		margin-bottom: 1rem;
-	}
-
-	.fp-form-label {
-		display: block;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: #1d2327;
-		margin-bottom: 0.375rem;
-	}
-
-	.fp-form-label span {
-		color: #d63638;
-	}
-
-	.fp-form-input,
-	.fp-form-textarea {
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid #c3c4c7;
-		border-radius: 4px;
-		font-size: 0.9375rem;
-		font-family: inherit;
-		color: #1d2327;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.fp-form-input:focus,
-	.fp-form-textarea:focus {
-		border-color: #2271b1;
-	}
-
-	.fp-form-textarea {
-		resize: vertical;
-		min-height: 120px;
-	}
-
-	.fp-form-hint {
-		font-size: 0.75rem;
-		color: #646970;
-		margin-top: 0.25rem;
-	}
-
-	.fp-form-submit {
-		padding: 0.625rem 1.5rem;
-		background: #1d2327;
-		color: #fff;
-		border: none;
-		border-radius: 4px;
-		font-size: 0.9375rem;
-		font-family: inherit;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background 0.15s;
-	}
-
-	.fp-form-submit:hover {
-		background: #2271b1;
-	}
-
+	.fp-single-content :global(blockquote) { border-left: 3px solid #1d2327; padding-left: 1.25rem; margin: 1.5rem 0; color: #3c434a; font-style: italic; font-size: 1.05rem; }
+	.fp-single-content :global(pre) { background: #f6f7f7; border: 1px solid #e8e8e8; border-radius: 4px; padding: 1rem 1.25rem; overflow-x: auto; margin-bottom: 1.5rem; font-size: 0.875rem; }
+	.fp-single-content :global(code) { font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace; font-size: 0.875em; }
+	.fp-single-content :global(ul),.fp-single-content :global(ol) { margin-bottom: 1.5rem; padding-left: 1.5rem; }
+	.fp-single-content :global(li) { margin-bottom: 0.25rem; }
+	.fp-single-content :global(figure) { margin: 1.5rem 0; }
+	.fp-single-content :global(figure img) { border-radius: 4px; width: 100%; }
+	.fp-single-content :global(hr) { border: none; border-top: 1px solid #e8e8e8; margin: 2rem 0; }
+	.fp-single-content :global(a) { color: #2271b1; }
+	.fp-single-footer { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e8e8e8; }
+	.fp-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+	.fp-tags-label { font-size: 0.8125rem; color: #646970; font-weight: 500; }
+	.fp-tag { display: inline-block; padding: 0.2rem 0.6rem; border: 1px solid #c3c4c7; border-radius: 2rem; font-size: 0.75rem; color: #646970; text-decoration: none; transition: border-color 0.15s, color 0.15s; }
+	.fp-tag:hover { border-color: #2271b1; color: #2271b1; }
+	.fp-author-box { display: flex; gap: 1.25rem; align-items: flex-start; margin-top: 2.5rem; padding: 1.5rem; background: #f6f7f7; border-radius: 6px; }
+	.fp-author-avatar { border-radius: 50%; flex-shrink: 0; }
+	.fp-author-name { display: block; font-family: 'Playfair Display', Georgia, serif; font-size: 1rem; font-weight: 700; color: #1d2327; text-decoration: none; margin-bottom: 0.25rem; }
+	.fp-author-name:hover { color: #2271b1; }
+	.fp-author-bio { font-size: 0.875rem; color: #3c434a; line-height: 1.6; }
+	.fp-comments { max-width: 720px; margin-top: 3rem; padding-top: 2rem; border-top: 2px solid #1d2327; }
+	.fp-comments-title { font-family: 'Playfair Display', Georgia, serif; font-size: 1.5rem; font-weight: 700; color: #1d2327; margin-bottom: 1.5rem; }
+	.fp-comment-list { padding: 0; margin-bottom: 2rem; }
+	.fp-comments-closed { font-size: 0.875rem; color: #646970; font-style: italic; }
+	.fp-comment-form-wrap { margin-top: 2rem; }
+	.fp-reply-indicator { background: #f0f0f1; border-left: 3px solid #2271b1; padding: 8px 12px; font-size: 0.8125rem; margin-bottom: 12px; border-radius: 0 4px 4px 0; color: #3c434a; }
+	.fp-cancel-reply { background: none; border: none; padding: 0; color: #2271b1; cursor: pointer; font-size: 0.8125rem; font-family: inherit; text-decoration: underline; }
+	.fp-cancel-reply:hover { color: #d63638; }
+	.fp-comment-form-title { font-family: 'Playfair Display', Georgia, serif; font-size: 1.25rem; font-weight: 700; margin-bottom: 1.25rem; }
+	.fp-notice { padding: 0.875rem 1rem; border-radius: 4px; font-size: 0.875rem; margin-bottom: 1rem; }
+	.fp-notice--success { background: #edfaef; border: 1px solid #00a32a; color: #004a12; }
+	.fp-notice--error { background: #fceaea; border: 1px solid #d63638; color: #6d0d0f; }
+	.fp-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+	.fp-form-field { margin-bottom: 1rem; }
+	.fp-form-label { display: block; font-size: 0.875rem; font-weight: 500; color: #1d2327; margin-bottom: 0.375rem; }
+	.fp-form-label span { color: #d63638; }
+	.fp-form-input,.fp-form-textarea { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #c3c4c7; border-radius: 4px; font-size: 0.9375rem; font-family: inherit; color: #1d2327; outline: none; transition: border-color 0.15s; }
+	.fp-form-input:focus,.fp-form-textarea:focus { border-color: #2271b1; }
+	.fp-form-textarea { resize: vertical; min-height: 120px; }
+	.fp-form-hint { font-size: 0.75rem; color: #646970; margin-top: 0.25rem; }
+	.fp-form-submit { padding: 0.625rem 1.5rem; background: #1d2327; color: #fff; border: none; border-radius: 4px; font-size: 0.9375rem; font-family: inherit; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+	.fp-form-submit:hover { background: #2271b1; }
 	@media (max-width: 600px) {
-		.fp-single-title {
-			font-size: 1.75rem;
-		}
-
-		.fp-form-row {
-			grid-template-columns: 1fr;
-		}
+		.fp-single-title { font-size: 1.75rem; }
+		.fp-form-row { grid-template-columns: 1fr; }
 	}
 </style>

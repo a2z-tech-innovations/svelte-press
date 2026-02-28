@@ -15,6 +15,7 @@ export const load: LayoutServerLoad = async () => {
 	const siteName = optMap['blogname'] ?? 'SveltePress';
 	const siteDescription = optMap['blogdescription'] ?? '';
 	const activeTheme = optMap['active_theme'] ?? 'default';
+	const permalinkStructure = optMap['permalink_structure'] ?? '/%postname%/';
 
 	// Load primary menu
 	const primaryMenu = db
@@ -82,6 +83,7 @@ export const load: LayoutServerLoad = async () => {
 		themeSlug,
 		themeCssUrl,
 		menuItems: navMenuItems,
-		archiveMonths
+		archiveMonths,
+		permalinkStructure
 	};
 };

@@ -1,10 +1,11 @@
 import { redirect, fail, error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { posts, users, terms, postTerms, revisions } from '$lib/server/db/schema.js';
+import { posts, users, terms, postTerms, revisions, postMeta, options } from '$lib/server/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { slugify } from '$lib/utils.js';
 import { nanoid } from 'nanoid';
+import { logActivity } from '$lib/server/activity/index.js';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const id = Number(params.id);
@@ -43,13 +44,30 @@ export const load: PageServerLoad = async ({ params }) => {
 		username: users.username
 	}).from(users).all();
 
+	// Load existing post password if any
+	const postPasswordMeta = db
+		.select({ metaValue: postMeta.metaValue })
+		.from(postMeta)
+		.where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, 'post_password')))
+		.get();
+
+	// Load permalink structure so the editor can show the correct preview URL
+	const permalinkOpt = db
+		.select({ optionValue: options.optionValue })
+		.from(options)
+		.where(eq(options.optionName, 'permalink_structure'))
+		.get();
+	const permalinkStructure = permalinkOpt?.optionValue ?? '/%postname%/';
+
 	return {
 		post,
 		postCategories,
 		postTags,
 		categories,
 		tags,
-		allUsers
+		allUsers,
+		postPassword: postPasswordMeta?.metaValue ?? '',
+		permalinkStructure
 	};
 };
 
@@ -67,6 +85,7 @@ export const actions: Actions = {
 		const commentStatus = data.get('commentStatus') === 'open' ? 'open' : 'closed';
 		const categoryIds = data.getAll('categoryIds').map(Number).filter(Boolean);
 		const tagIds = data.getAll('tagIds').map(Number).filter(Boolean);
+		const postPassword = String(data.get('postPassword') ?? '').trim();
 
 		if (!title) return fail(400, { error: 'Title is required.' });
 
@@ -102,6 +121,23 @@ export const actions: Actions = {
 			await db.insert(postTerms).values(termIds.map((termId) => ({ postId: id, termId })));
 		}
 
+		// Upsert post password in postMeta
+		if (status === 'private' && postPassword) {
+			const existing = db
+				.select({ id: postMeta.id })
+				.from(postMeta)
+				.where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, 'post_password')))
+				.get();
+			if (existing) {
+				await db.update(postMeta).set({ metaValue: postPassword }).where(eq(postMeta.id, existing.id));
+			} else {
+				await db.insert(postMeta).values({ postId: id, metaKey: 'post_password', metaValue: postPassword });
+			}
+		} else if (status !== 'private') {
+			// Remove password if post is no longer private
+			await db.delete(postMeta).where(and(eq(postMeta.postId, id), eq(postMeta.metaKey, 'post_password')));
+		}
+
 		// Save revision
 		await db.insert(revisions).values({
 			postId: id,
@@ -112,18 +148,46 @@ export const actions: Actions = {
 			createdAt: now
 		});
 
+		logActivity({
+			userId: locals.user!.id,
+			userDisplayName: locals.user!.displayName,
+			action: 'post_updated',
+			objectType: 'post',
+			objectId: id,
+			objectTitle: title,
+			details: { status }
+		}).catch(() => {});
+
 		return { success: true };
 	},
 
-	trash: async ({ params }) => {
+	trash: async ({ params, locals }) => {
 		const id = Number(params.id);
+		const post = db.select({ title: posts.title }).from(posts).where(eq(posts.id, id)).get();
 		await db.update(posts).set({ status: 'trash' }).where(eq(posts.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'post_trashed',
+			objectType: 'post',
+			objectId: id,
+			objectTitle: post?.title ?? ''
+		}).catch(() => {});
 		redirect(302, '/sp-admin/posts?status=trash');
 	},
 
-	restore: async ({ params }) => {
+	restore: async ({ params, locals }) => {
 		const id = Number(params.id);
+		const post = db.select({ title: posts.title }).from(posts).where(eq(posts.id, id)).get();
 		await db.update(posts).set({ status: 'draft' }).where(eq(posts.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'post_restored',
+			objectType: 'post',
+			objectId: id,
+			objectTitle: post?.title ?? ''
+		}).catch(() => {});
 		redirect(302, `/sp-admin/posts/${id}`);
 	}
 };

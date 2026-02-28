@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { posts, users } from '$lib/server/db/schema.js';
 import { eq, desc, and, or, like, count, sql, inArray } from 'drizzle-orm';
+import { logActivity } from '$lib/server/activity/index.js';
 
 const PER_PAGE = 20;
 
@@ -85,7 +86,7 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	bulk: async ({ request }) => {
+	bulk: async ({ request, locals }) => {
 		const data = await request.formData();
 		const action = String(data.get('bulkAction') ?? '');
 		const ids = data.getAll('postIds').map((v) => Number(v)).filter(Boolean);
@@ -94,12 +95,40 @@ export const actions: Actions = {
 
 		if (action === 'trash') {
 			await db.update(posts).set({ status: 'trash' }).where(inArray(posts.id, ids));
+			logActivity({
+				userId: locals.user?.id,
+				userDisplayName: locals.user?.displayName,
+				action: 'post_trashed',
+				objectType: 'post',
+				details: { ids, bulk: true }
+			}).catch(() => {});
 		} else if (action === 'restore') {
 			await db.update(posts).set({ status: 'draft' }).where(inArray(posts.id, ids));
+			logActivity({
+				userId: locals.user?.id,
+				userDisplayName: locals.user?.displayName,
+				action: 'post_restored',
+				objectType: 'post',
+				details: { ids, bulk: true }
+			}).catch(() => {});
 		} else if (action === 'delete') {
 			await db.delete(posts).where(inArray(posts.id, ids));
+			logActivity({
+				userId: locals.user?.id,
+				userDisplayName: locals.user?.displayName,
+				action: 'post_deleted',
+				objectType: 'post',
+				details: { ids, bulk: true }
+			}).catch(() => {});
 		} else if (action === 'publish') {
 			await db.update(posts).set({ status: 'publish', postDate: new Date() }).where(inArray(posts.id, ids));
+			logActivity({
+				userId: locals.user?.id,
+				userDisplayName: locals.user?.displayName,
+				action: 'post_published',
+				objectType: 'post',
+				details: { ids, bulk: true }
+			}).catch(() => {});
 		} else {
 			return fail(400, { error: 'Unknown action.' });
 		}
@@ -107,27 +136,54 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	trash: async ({ request }) => {
+	trash: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
+		const post = db.select({ title: posts.title }).from(posts).where(eq(posts.id, id)).get();
 		await db.update(posts).set({ status: 'trash' }).where(eq(posts.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'post_trashed',
+			objectType: 'post',
+			objectId: id,
+			objectTitle: post?.title ?? ''
+		}).catch(() => {});
 		return { success: true };
 	},
 
-	restore: async ({ request }) => {
+	restore: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
+		const post = db.select({ title: posts.title }).from(posts).where(eq(posts.id, id)).get();
 		await db.update(posts).set({ status: 'draft' }).where(eq(posts.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'post_restored',
+			objectType: 'post',
+			objectId: id,
+			objectTitle: post?.title ?? ''
+		}).catch(() => {});
 		return { success: true };
 	},
 
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
+		const post = db.select({ title: posts.title }).from(posts).where(eq(posts.id, id)).get();
 		await db.delete(posts).where(eq(posts.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'post_deleted',
+			objectType: 'post',
+			objectId: id,
+			objectTitle: post?.title ?? ''
+		}).catch(() => {});
 		return { success: true };
 	}
 };

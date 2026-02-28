@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { slugify, formatDate } from '$lib/utils.js';
+	import { slugify, formatDate, getPermalinkUrl } from '$lib/utils.js';
 	import BlockEditor from '$lib/components/blocks/BlockEditor.svelte';
 	import type { Block } from '$lib/types/index.js';
 
@@ -11,6 +11,7 @@
 	let slug = $state(data.post.slug);
 	let excerpt = $state(data.post.excerpt ?? '');
 	let status = $state(data.post.status as 'draft' | 'publish' | 'private' | 'pending');
+	let postPassword = $state(data.postPassword ?? '');
 	let authorId = $state(data.post.authorId);
 	let sticky = $state(data.post.sticky);
 	let commentStatus = $state(data.post.commentStatus as 'open' | 'closed');
@@ -23,6 +24,14 @@
 	let selectedTagIds = $state<Set<number>>(new Set(data.postTags.map((t) => t.id)));
 	let saving = $state(false);
 	let submitStatus = $state(status);
+
+	// Derive the canonical permalink URL from the current slug, post date, and permalink structure
+	let permalinkPreview = $derived(
+		getPermalinkUrl(
+			{ id: data.post.id, slug, postDate: data.post.postDate },
+			data.permalinkStructure ?? '/%postname%/'
+		)
+	);
 
 	function toggleSection(key: string) {
 		activePanelSection = activePanelSection === key ? '' : key;
@@ -56,6 +65,9 @@
 	<input type="hidden" name="authorId" bind:value={authorId} />
 	<input type="hidden" name="slug" bind:value={slug} />
 	<input type="hidden" name="commentStatus" value={commentStatus} />
+	{#if status === 'private'}
+		<input type="hidden" name="postPassword" bind:value={postPassword} />
+	{/if}
 	{#each [...selectedCategoryIds] as id}
 		<input type="hidden" name="categoryIds" value={id} />
 	{/each}
@@ -129,7 +141,7 @@
 						required
 					/>
 					<div style="margin:8px 0; font-size:13px; color:var(--sp-text-muted);">
-						Permalink: <a href="/{slug}" target="_blank" style="color:var(--sp-primary)">/{slug}</a>
+						Permalink: <a href={permalinkPreview} target="_blank" style="color:var(--sp-primary)">{permalinkPreview}</a>
 						<span style="margin-left:8px;">
 							<a href="/sp-admin/revisions/{data.post.id}" style="font-size:12px; color:var(--sp-text-muted);">Browse revisions</a>
 						</span>
@@ -162,13 +174,29 @@
 								<div class="sp-panel-section-body">
 									<div class="sp-field">
 										<label class="sp-label">Status</label>
-										<select class="sp-select" bind:value={status}>
+										<select class="sp-select" bind:value={status} onchange={() => { submitStatus = status; }}>
 											<option value="draft">Draft</option>
 											<option value="pending">Pending Review</option>
 											<option value="publish">Published</option>
-											<option value="private">Private</option>
+											<option value="private">Private / Password Protected</option>
 										</select>
 									</div>
+									{#if status === 'private'}
+										<div class="sp-field" style="margin-top:8px;">
+											<label class="sp-label" for="post-password">Post Password</label>
+											<input
+												id="post-password"
+												type="text"
+												class="sp-input"
+												placeholder="Leave blank for no password gate…"
+												bind:value={postPassword}
+												autocomplete="off"
+											/>
+											<p style="font-size:11px; color:var(--sp-text-muted); margin-top:4px;">
+												If set, visitors must enter this password to view the post.
+											</p>
+										</div>
+									{/if}
 									<div class="sp-field" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
 										<input type="checkbox" id="sticky" bind:checked={sticky} />
 										<label for="sticky" class="sp-label" style="margin:0">Stick to the top</label>

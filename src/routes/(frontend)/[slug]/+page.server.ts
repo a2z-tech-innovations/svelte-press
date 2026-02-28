@@ -1,10 +1,11 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types.js';
 import { createHash } from 'crypto';
 import { db } from '$lib/server/db/index.js';
-import { posts, users, comments, postTerms, terms } from '$lib/server/db/schema.js';
+import { posts, users, comments, postTerms, terms, postMeta, options } from '$lib/server/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { sendEmail } from '$lib/server/email/index.js';
+import { getPermalinkUrl } from '$lib/utils.js';
 
 function gravatar(email: string, size = 48): string {
 	const hash = createHash('md5').update((email ?? '').trim().toLowerCase()).digest('hex');
@@ -46,10 +47,10 @@ function buildCommentTree(flatComments: Omit<CommentWithChildren, 'children'>[])
 	return roots;
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, cookies, url }) => {
 	const { slug } = params;
 
-	// Load post or page by slug
+	// Load post or page by slug — allow both published and password-protected (private) posts
 	const post = db
 		.select({
 			id: posts.id,
@@ -70,11 +71,85 @@ export const load: PageServerLoad = async ({ params }) => {
 		})
 		.from(posts)
 		.leftJoin(users, eq(posts.authorId, users.id))
-		.where(and(eq(posts.slug, slug), eq(posts.status, 'publish')))
+		.where(and(eq(posts.slug, slug)))
 		.get();
 
-	if (!post) {
+	if (!post || (post.status !== 'publish' && post.status !== 'private')) {
 		error(404, 'Post not found');
+	}
+
+	// For posts (not pages), redirect to canonical permalink URL when structure requires a different path.
+	// This turns old /slug links into canonical URLs transparently.
+	if (post.postType === 'post' && post.status === 'publish') {
+		const permalinkOpt = db
+			.select({ optionValue: options.optionValue })
+			.from(options)
+			.where(eq(options.optionName, 'permalink_structure'))
+			.get();
+
+		const structure = permalinkOpt?.optionValue ?? '/%postname%/';
+
+		// Only redirect away from this [slug] route when structure is not post-name or plain
+		if (
+			structure !== '/%postname%/' &&
+			structure !== '' &&
+			structure !== null
+		) {
+			const canonicalPath = getPermalinkUrl(
+				{ id: post.id, slug: post.slug, postDate: post.postDate },
+				structure
+			);
+			// Compare without trailing slash to handle both /slug and /slug/
+			const normCurrent = url.pathname.replace(/\/$/, '');
+			const normCanonical = canonicalPath.replace(/\/$/, '');
+			if (normCurrent !== normCanonical) {
+				redirect(301, canonicalPath);
+			}
+		}
+	}
+
+	// Check if this private post has a password gate
+	if (post.status === 'private') {
+		const passwordMeta = db
+			.select({ metaValue: postMeta.metaValue })
+			.from(postMeta)
+			.where(and(eq(postMeta.postId, post.id), eq(postMeta.metaKey, 'post_password')))
+			.get();
+
+		const hasPassword = passwordMeta && passwordMeta.metaValue && passwordMeta.metaValue.length > 0;
+
+		if (hasPassword) {
+			// Check if visitor has the unlock cookie
+			const unlockCookie = cookies.get(`pp_${post.id}`);
+			if (!unlockCookie) {
+				// Return only safe fields — no content
+				return {
+					post: {
+						id: post.id,
+						title: post.title,
+						slug: post.slug,
+						content: [] as unknown[],
+						excerpt: '',
+						status: post.status,
+						postType: post.postType,
+						postDate: post.postDate,
+						modifiedDate: post.modifiedDate,
+						commentStatus: post.commentStatus,
+						authorId: post.authorId,
+						authorName: post.authorName,
+						authorUsername: post.authorUsername,
+						authorBio: post.authorBio,
+						authorEmail: post.authorEmail,
+						authorAvatarUrl: gravatar(post.authorEmail ?? '', 72)
+					},
+					passwordRequired: true,
+					comments: [],
+					commentTree: [],
+					categories: [],
+					tags: []
+				};
+			}
+		}
 	}
 
 	// Load comments (approved, ordered asc)
@@ -131,6 +206,44 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
+	unlock: async ({ request, cookies, params }) => {
+		const { slug } = params;
+
+		const post = db
+			.select({ id: posts.id })
+			.from(posts)
+			.where(eq(posts.slug, slug))
+			.get();
+
+		if (!post) return fail(404, { passwordError: 'Post not found.' });
+
+		const meta = db
+			.select({ metaValue: postMeta.metaValue })
+			.from(postMeta)
+			.where(and(eq(postMeta.postId, post.id), eq(postMeta.metaKey, 'post_password')))
+			.get();
+
+		if (!meta || !meta.metaValue) {
+			return fail(400, { passwordError: 'This post is not password protected.' });
+		}
+
+		const data = await request.formData();
+		const password = String(data.get('password') ?? '');
+
+		if (password !== meta.metaValue) {
+			return fail(400, { passwordError: 'Incorrect password. Please try again.' });
+		}
+
+		cookies.set(`pp_${post.id}`, '1', {
+			path: '/',
+			httpOnly: true,
+			maxAge: 60 * 60 * 24,
+			sameSite: 'lax'
+		});
+
+		redirect(302, `/${slug}`);
+	},
+
 	comment: async (event) => {
 		const { request, params, getClientAddress } = event;
 		const { slug } = params;
@@ -196,7 +309,7 @@ export const actions: Actions = {
 
 			// Only notify if we have an author email and the commenter is not the author
 			if (postAuthor?.email && postAuthor.email !== email) {
-				const postUrl = `${event.url.origin}/${post.slug}`;
+				const postUrl = `${event.url.origin}${event.url.pathname}`;
 				sendEmail({
 					to: postAuthor.email,
 					subject: `New comment on "${post.title}"`,

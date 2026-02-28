@@ -47,7 +47,7 @@
 		if (p.includes('/sp-admin/themes') || p.includes('/sp-admin/menus') || p.includes('/sp-admin/widgets')) expanded.appearance = true;
 		if (p.includes('/sp-admin/users') || p.includes('/sp-admin/profile')) expanded.users = true;
 		if (p.includes('/sp-admin/settings')) expanded.settings = true;
-		if (p.includes('/sp-admin/tools')) expanded.tools = true;
+		if (p.includes('/sp-admin/tools') || p.includes('/sp-admin/activity')) expanded.tools = true;
 	});
 
 	const siteName = $derived(data.siteOptions['blogname'] ?? 'SveltePress');
@@ -262,7 +262,7 @@
 			<div class="sp-nav-item">
 				<button
 					class="sp-nav-link"
-					class:active={isActive('/sp-admin/tools')}
+					class:active={isActive('/sp-admin/tools') || isActive('/sp-admin/activity')}
 					onclick={() => toggle('tools')}
 				>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -276,6 +276,7 @@
 				{#if expanded.tools}
 					<div class="sp-subnav">
 						<a href="/sp-admin/tools" class="sp-subnav-link" class:active={isExact('/sp-admin/tools')}>Import / Export</a>
+						<a href="/sp-admin/activity" class="sp-subnav-link" class:active={isActive('/sp-admin/activity')}>Activity Log</a>
 					</div>
 				{/if}
 			</div>

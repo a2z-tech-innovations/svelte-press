@@ -12,6 +12,7 @@
 	let excerpt = $state('');
 	let status = $state<'draft' | 'publish' | 'private' | 'pending'>('draft');
 	let visibility = $state<'public' | 'private' | 'password'>('public');
+	let postPassword = $state('');
 	let authorId = $state(data.allUsers[0]?.id ?? 1);
 	let sticky = $state(false);
 	let commentStatus = $state<'open' | 'closed'>('open');
@@ -60,6 +61,9 @@
 	<input type="hidden" name="status" bind:value={status} />
 	<input type="hidden" name="authorId" bind:value={authorId} />
 	<input type="hidden" name="slug" bind:value={slug} />
+	{#if visibility === 'password'}
+		<input type="hidden" name="postPassword" bind:value={postPassword} />
+	{/if}
 	{#each [...selectedCategoryIds] as id}
 		<input type="hidden" name="categoryIds" value={id} />
 	{/each}
@@ -81,7 +85,7 @@
 					type="submit"
 					class="sp-btn sp-btn-secondary sp-btn-sm"
 					disabled={saving}
-					onclick={() => { status = visibility === 'private' ? 'private' : 'draft'; }}
+					onclick={() => { status = (visibility === 'private' || visibility === 'password') ? 'private' : 'draft'; }}
 				>
 					{saving && status === 'draft' ? 'Saving…' : 'Save Draft'}
 				</button>
@@ -89,7 +93,7 @@
 					type="submit"
 					class="sp-btn sp-btn-primary sp-btn-sm"
 					disabled={saving}
-					onclick={() => { status = visibility === 'private' ? 'private' : visibility === 'password' ? 'draft' : 'publish'; }}
+					onclick={() => { status = (visibility === 'private' || visibility === 'password') ? 'private' : 'publish'; }}
 				>
 					{saving && status === 'publish' ? 'Publishing…' : 'Publish'}
 				</button>
@@ -161,6 +165,20 @@
 											<option value="password">Password Protected</option>
 										</select>
 									</div>
+									{#if visibility === 'password'}
+										<div class="sp-field" style="margin-top:8px;">
+											<label class="sp-label" for="post-password">Password</label>
+											<input
+												id="post-password"
+												type="text"
+												class="sp-input"
+												placeholder="Enter password…"
+												bind:value={postPassword}
+												autocomplete="off"
+											/>
+											<p style="font-size:11px; color:var(--sp-text-muted); margin-top:4px;">Visitors must enter this to view the post.</p>
+										</div>
+									{/if}
 									<div class="sp-field" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
 										<input type="checkbox" id="sticky" bind:checked={sticky} />
 										<label for="sticky" class="sp-label" style="margin:0">Stick to the top of the blog</label>

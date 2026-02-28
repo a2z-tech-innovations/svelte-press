@@ -276,3 +276,28 @@ export const widgets = sqliteTable('widgets', {
 	settings: text('settings', { mode: 'json' }).$type<Record<string, unknown>>().default({}),
 	order: integer('order').notNull().default(0)
 });
+
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+
+export const activityLog = sqliteTable(
+	'activity_log',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: integer('user_id'),
+		userDisplayName: text('user_display_name'),
+		action: text('action').notNull(),
+		objectType: text('object_type'),
+		objectId: integer('object_id'),
+		objectTitle: text('object_title'),
+		details: text('details'),
+		ip: text('ip'),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(strftime('%s', 'now'))`)
+	},
+	(t) => [
+		index('activity_log_user_idx').on(t.userId),
+		index('activity_log_action_idx').on(t.action),
+		index('activity_log_created_idx').on(t.createdAt)
+	]
+);

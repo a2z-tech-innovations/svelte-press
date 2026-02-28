@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { processUpload } from '$lib/server/media/upload.js';
 import { can } from '$lib/server/permissions/index.js';
+import { logActivity } from '$lib/server/activity/index.js';
 
 // ─── POST /api/upload ─────────────────────────────────────────────────────────
 // Handle multipart file upload. Auth required (upload_files capability).
@@ -35,5 +36,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const media = await processUpload(file, locals.user.id);
+
+	logActivity({
+		userId: locals.user.id,
+		userDisplayName: locals.user.displayName,
+		action: 'media_uploaded',
+		objectType: 'media',
+		objectId: media.id,
+		objectTitle: file.name,
+		details: { mimeType: file.type, size: file.size }
+	}).catch(() => {});
+
 	return json(media, { status: 201 });
 };

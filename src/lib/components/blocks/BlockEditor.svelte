@@ -55,7 +55,7 @@
 			separator: { content: '', attrs: { style: 'default' } },
 			spacer: { content: '', attrs: { height: 40 } },
 			table: { content: '', attrs: { rows: [['', ''], ['', '']], hasHeader: true } },
-			columns: { content: '', attrs: { columns: 2 }, },
+			columns: { content: '', attrs: { columns: 2, leftBlocks: [], rightBlocks: [] } },
 			button: { content: 'Click here', attrs: { url: '', target: '_self', style: 'fill' } },
 			embed: { content: '', attrs: { url: '', caption: '' } },
 			html: { content: '', attrs: {} },

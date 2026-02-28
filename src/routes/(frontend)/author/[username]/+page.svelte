@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types.js';
-	import { formatDate, getMediaUrl } from '$lib/utils.js';
+	import { formatDate, getMediaUrl, getPermalinkUrl } from '$lib/utils.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -11,6 +11,10 @@
 			? getMediaUrl(data.author.avatar)
 			: data.author.gravatarUrl
 	);
+
+	function postUrl(post: { id: number; slug: string; postDate: Date | null | undefined }): string {
+		return getPermalinkUrl(post, data.permalinkStructure ?? '/%postname%/');
+	}
 </script>
 
 <svelte:head>
@@ -56,7 +60,7 @@
 					<article class="fp-post-card">
 						<header class="fp-post-card-header">
 							<h3 class="fp-post-card-title">
-								<a href="/{post.slug}" class="fp-post-card-link">{post.title || '(Untitled)'}</a>
+								<a href={postUrl(post)} class="fp-post-card-link">{post.title || '(Untitled)'}</a>
 							</h3>
 							<div class="fp-post-meta">
 								<time class="fp-post-date" datetime={post.postDate?.toISOString() ?? ''}>
@@ -78,11 +82,11 @@
 							</div>
 						{/if}
 						<footer class="fp-post-card-footer">
-							<a href="/{post.slug}" class="fp-read-more">
+							<a href={postUrl(post)} class="fp-read-more">
 								Continue reading <span aria-hidden="true">&rarr;</span>
 							</a>
 							{#if post.commentCount > 0}
-								<a href="/{post.slug}#comments" class="fp-comment-count">
+								<a href="{postUrl(post)}#comments" class="fp-comment-count">
 									{post.commentCount} {post.commentCount === 1 ? 'comment' : 'comments'}
 								</a>
 							{/if}

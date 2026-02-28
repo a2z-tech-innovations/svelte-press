@@ -4,6 +4,7 @@ import { getPluginList } from '$lib/server/plugins/loader.js';
 import { db } from '$lib/server/db/index.js';
 import { options } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { logActivity } from '$lib/server/activity/index.js';
 
 export const load: PageServerLoad = async () => {
 	const plugins = getPluginList();
@@ -11,7 +12,7 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	toggle: async ({ request }) => {
+	toggle: async ({ request, locals }) => {
 		const data = await request.formData();
 		const slug = String(data.get('slug') ?? '');
 		const activate = data.get('activate') === '1';
@@ -34,6 +35,14 @@ export const actions: Actions = {
 		} else {
 			await db.insert(options).values({ optionName: 'active_plugins', optionValue: newValue });
 		}
+
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: activate ? 'plugin_activated' : 'plugin_deactivated',
+			objectType: 'plugin',
+			objectTitle: slug
+		}).catch(() => {});
 
 		return { success: true, action: activate ? 'activated' : 'deactivated', slug };
 	}

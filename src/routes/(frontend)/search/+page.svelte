@@ -1,11 +1,15 @@
 <script lang="ts">
 	import type { PageData } from './$types.js';
-	import { formatDate } from '$lib/utils.js';
+	import { formatDate, getPermalinkUrl } from '$lib/utils.js';
 
 	let { data }: { data: PageData } = $props();
 
 	let totalPages = $derived(Math.ceil(data.total / data.perPage));
 	let searchValue = $state(data.query);
+
+	function postUrl(post: { id: number; slug: string; postDate: Date | null | undefined }): string {
+		return getPermalinkUrl(post, data.permalinkStructure ?? '/%postname%/');
+	}
 </script>
 
 <svelte:head>
@@ -56,7 +60,7 @@
 						<article class="fp-post-card">
 							<header class="fp-post-card-header">
 								<h2 class="fp-post-card-title">
-									<a href="/{post.slug}" class="fp-post-card-link">{post.title || '(Untitled)'}</a>
+									<a href={postUrl(post)} class="fp-post-card-link">{post.title || '(Untitled)'}</a>
 								</h2>
 								<div class="fp-post-meta">
 									<time class="fp-post-date" datetime={post.postDate?.toISOString() ?? ''}>
@@ -76,7 +80,7 @@
 								</div>
 							{/if}
 							<footer class="fp-post-card-footer">
-								<a href="/{post.slug}" class="fp-read-more">
+								<a href={postUrl(post)} class="fp-read-more">
 									Read post <span aria-hidden="true">&rarr;</span>
 								</a>
 							</footer>

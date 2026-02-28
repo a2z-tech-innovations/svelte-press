@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { comments, posts } from '$lib/server/db/schema.js';
 import { eq, desc, and, like, count, sql, inArray } from 'drizzle-orm';
+import { logActivity } from '$lib/server/activity/index.js';
 
 const PER_PAGE = 20;
 
@@ -77,47 +78,82 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-	approve: async ({ request }) => {
+	approve: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
 		await db.update(comments).set({ status: 'approved' }).where(eq(comments.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'comment_approved',
+			objectType: 'comment',
+			objectId: id
+		}).catch(() => {});
 		return { success: true };
 	},
 
-	unapprove: async ({ request }) => {
+	unapprove: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
 		await db.update(comments).set({ status: 'pending' }).where(eq(comments.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'comment_unapproved',
+			objectType: 'comment',
+			objectId: id
+		}).catch(() => {});
 		return { success: true };
 	},
 
-	spam: async ({ request }) => {
+	spam: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
 		await db.update(comments).set({ status: 'spam' }).where(eq(comments.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'comment_marked_spam',
+			objectType: 'comment',
+			objectId: id
+		}).catch(() => {});
 		return { success: true };
 	},
 
-	trash: async ({ request }) => {
+	trash: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
 		await db.update(comments).set({ status: 'trash' }).where(eq(comments.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'comment_trashed',
+			objectType: 'comment',
+			objectId: id
+		}).catch(() => {});
 		return { success: true };
 	},
 
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		if (!id) return fail(400, { error: 'Missing id.' });
 		await db.delete(comments).where(eq(comments.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'comment_deleted',
+			objectType: 'comment',
+			objectId: id
+		}).catch(() => {});
 		return { success: true };
 	},
 
-	bulk: async ({ request }) => {
+	bulk: async ({ request, locals }) => {
 		const data = await request.formData();
 		const action = String(data.get('bulkAction') ?? '');
 		const ids = data.getAll('commentIds').map((v) => Number(v)).filter(Boolean);
@@ -126,14 +162,19 @@ export const actions: Actions = {
 
 		if (action === 'approve') {
 			await db.update(comments).set({ status: 'approved' }).where(inArray(comments.id, ids));
+			logActivity({ userId: locals.user?.id, userDisplayName: locals.user?.displayName, action: 'comment_approved', objectType: 'comment', details: { ids, bulk: true } }).catch(() => {});
 		} else if (action === 'unapprove') {
 			await db.update(comments).set({ status: 'pending' }).where(inArray(comments.id, ids));
+			logActivity({ userId: locals.user?.id, userDisplayName: locals.user?.displayName, action: 'comment_unapproved', objectType: 'comment', details: { ids, bulk: true } }).catch(() => {});
 		} else if (action === 'spam') {
 			await db.update(comments).set({ status: 'spam' }).where(inArray(comments.id, ids));
+			logActivity({ userId: locals.user?.id, userDisplayName: locals.user?.displayName, action: 'comment_marked_spam', objectType: 'comment', details: { ids, bulk: true } }).catch(() => {});
 		} else if (action === 'trash') {
 			await db.update(comments).set({ status: 'trash' }).where(inArray(comments.id, ids));
+			logActivity({ userId: locals.user?.id, userDisplayName: locals.user?.displayName, action: 'comment_trashed', objectType: 'comment', details: { ids, bulk: true } }).catch(() => {});
 		} else if (action === 'delete') {
 			await db.delete(comments).where(inArray(comments.id, ids));
+			logActivity({ userId: locals.user?.id, userDisplayName: locals.user?.displayName, action: 'comment_deleted', objectType: 'comment', details: { ids, bulk: true } }).catch(() => {});
 		} else {
 			return fail(400, { error: 'Unknown action.' });
 		}

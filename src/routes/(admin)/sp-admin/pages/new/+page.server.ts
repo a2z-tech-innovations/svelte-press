@@ -5,6 +5,7 @@ import { posts, users, revisions } from '$lib/server/db/schema.js';
 import { eq, sql, and, ne } from 'drizzle-orm';
 import { slugify } from '$lib/utils.js';
 import { nanoid } from 'nanoid';
+import { logActivity } from '$lib/server/activity/index.js';
 
 export const load: PageServerLoad = async () => {
 	const allPages = db
@@ -70,6 +71,15 @@ export const actions: Actions = {
 			userId: locals.user!.id,
 			createdAt: now
 		});
+
+		logActivity({
+			userId: locals.user!.id,
+			userDisplayName: locals.user!.displayName,
+			action: status === 'publish' ? 'page_published' : 'page_saved',
+			objectType: 'page',
+			objectId: pageId,
+			objectTitle: title
+		}).catch(() => {});
 
 		redirect(302, `/sp-admin/pages/${pageId}`);
 	}

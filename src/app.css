@@ -1291,3 +1291,27 @@
 	border-radius: 12px;
 	pointer-events: none;
 }
+
+/* ─── Password-protected post gate ───────────────────────────────────────── */
+
+.sp-password-gate {
+	max-width: 420px;
+	margin: 32px 0;
+	padding: 32px;
+	background: white;
+	border: 1px solid var(--sp-border);
+	border-radius: 4px;
+}
+
+.sp-password-gate-title {
+	font-size: 20px;
+	font-weight: 600;
+	margin: 0 0 8px;
+	color: var(--sp-text);
+}
+
+.sp-password-gate-desc {
+	font-size: 14px;
+	color: var(--sp-text-muted);
+	margin: 0 0 20px;
+}

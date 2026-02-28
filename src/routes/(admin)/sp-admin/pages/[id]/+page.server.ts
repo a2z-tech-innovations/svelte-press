@@ -5,6 +5,7 @@ import { posts, users, revisions } from '$lib/server/db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { slugify } from '$lib/utils.js';
 import { nanoid } from 'nanoid';
+import { logActivity } from '$lib/server/activity/index.js';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const id = Number(params.id);
@@ -81,18 +82,46 @@ export const actions: Actions = {
 			createdAt: now
 		});
 
+		logActivity({
+			userId: locals.user!.id,
+			userDisplayName: locals.user!.displayName,
+			action: 'page_updated',
+			objectType: 'page',
+			objectId: id,
+			objectTitle: title,
+			details: { status }
+		}).catch(() => {});
+
 		return { success: true };
 	},
 
-	trash: async ({ params }) => {
+	trash: async ({ params, locals }) => {
 		const id = Number(params.id);
+		const page = db.select({ title: posts.title }).from(posts).where(eq(posts.id, id)).get();
 		await db.update(posts).set({ status: 'trash' }).where(eq(posts.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'page_trashed',
+			objectType: 'page',
+			objectId: id,
+			objectTitle: page?.title ?? ''
+		}).catch(() => {});
 		redirect(302, '/sp-admin/pages?status=trash');
 	},
 
-	restore: async ({ params }) => {
+	restore: async ({ params, locals }) => {
 		const id = Number(params.id);
+		const page = db.select({ title: posts.title }).from(posts).where(eq(posts.id, id)).get();
 		await db.update(posts).set({ status: 'draft' }).where(eq(posts.id, id));
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'page_restored',
+			objectType: 'page',
+			objectId: id,
+			objectTitle: page?.title ?? ''
+		}).catch(() => {});
 		redirect(302, `/sp-admin/pages/${id}`);
 	}
 };

@@ -2,6 +2,7 @@ import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { options } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { logActivity } from '$lib/server/activity/index.js';
 
 const OPTION_KEYS = [
 	'default_pingback_flag',
@@ -36,7 +37,7 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-	save: async ({ request }) => {
+	save: async ({ request, locals }) => {
 		const data = await request.formData();
 
 		for (const key of OPTION_KEYS) {
@@ -48,6 +49,14 @@ export const actions: Actions = {
 				await db.insert(options).values({ optionName: key, optionValue: value });
 			}
 		}
+
+		logActivity({
+			userId: locals.user?.id,
+			userDisplayName: locals.user?.displayName,
+			action: 'settings_updated',
+			objectType: 'settings',
+			objectTitle: 'discussion'
+		}).catch(() => {});
 
 		return { success: true };
 	}

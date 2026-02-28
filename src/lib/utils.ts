@@ -81,3 +81,55 @@ export function getMediaUrl(path: string): string {
 	// path stored relative to static/ dir
 	return '/' + path.replace(/^\.?\/?static\//, '').replace(/^\//, '');
 }
+
+/**
+ * Generate a permalink URL for a post based on the active permalink structure.
+ *
+ * Structures map:
+ *   ''                                   → plain: /?p={id}
+ *   '/%year%/%monthnum%/%day%/%postname%/' → day-name: /2026/02/28/post-slug/
+ *   '/%year%/%monthnum%/%postname%/'      → month-name: /2026/02/post-slug/
+ *   '/archives/%post_id%'                → numeric: /archives/123
+ *   '/%postname%/'                       → post-name (default): /post-slug/
+ *   anything else with %postname%        → custom, replace tokens
+ */
+export function getPermalinkUrl(
+	post: { id: number; slug: string; postDate: Date | string | null | undefined },
+	structure: string,
+	_customBase?: string
+): string {
+	const date = post.postDate ? new Date(post.postDate) : new Date();
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+
+	// Known preset structures
+	if (!structure || structure === '') {
+		return `/?p=${post.id}`;
+	}
+	if (structure === '/%year%/%monthnum%/%day%/%postname%/') {
+		return `/${year}/${month}/${day}/${post.slug}/`;
+	}
+	if (structure === '/%year%/%monthnum%/%postname%/') {
+		return `/${year}/${month}/${post.slug}/`;
+	}
+	if (structure === '/archives/%post_id%') {
+		return `/archives/${post.id}`;
+	}
+	if (structure === '/%postname%/') {
+		return `/${post.slug}/`;
+	}
+
+	// Custom structure — replace all known tokens
+	const result = structure
+		.replace('%year%', String(year))
+		.replace('%monthnum%', month)
+		.replace('%day%', day)
+		.replace('%post_id%', String(post.id))
+		.replace('%postname%', post.slug)
+		.replace('%author%', post.slug) // fallback; real author slug not available here
+		.replace('%category%', ''); // fallback; category not available here
+
+	// Ensure the result starts with a slash
+	return result.startsWith('/') ? result : `/${result}`;
+}
