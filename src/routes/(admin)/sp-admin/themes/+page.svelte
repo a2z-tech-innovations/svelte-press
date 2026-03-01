@@ -42,7 +42,7 @@
 				<!-- Screenshot -->
 				<div style="aspect-ratio:16/10;background:#f0f0f1;overflow:hidden;cursor:pointer;" onclick={() => (detailTheme = theme)}>
 					{#if theme.screenshot}
-						<img src="/themes/{theme.slug}/{theme.screenshot}" alt="{theme.name} screenshot" style="width:100%;height:100%;object-fit:cover;" />
+						<img src={theme.screenshot} alt="{theme.name} screenshot" style="width:100%;height:100%;object-fit:cover;" />
 					{:else}
 						<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;color:var(--sp-text-muted);">🎨</div>
 					{/if}
@@ -84,7 +84,7 @@
 			>×</button>
 
 			{#if detailTheme.screenshot}
-				<img src="/themes/{detailTheme.slug}/{detailTheme.screenshot}" alt="{detailTheme.name} screenshot" style="width:100%;aspect-ratio:16/8;object-fit:cover;border-radius:8px 8px 0 0;" />
+				<img src={detailTheme.screenshot} alt="{detailTheme.name} screenshot" style="width:100%;aspect-ratio:16/8;object-fit:cover;border-radius:8px 8px 0 0;" />
 			{/if}
 
 			<div style="padding:24px;">

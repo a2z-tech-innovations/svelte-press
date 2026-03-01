@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { timeAgo, truncate } from '$lib/utils.js';
 
-	let { data, form } = $props<{
+	let { data, form }: {
 		data: {
 			stats: {
 				totalPosts: number;
@@ -18,7 +18,7 @@
 			siteDescription: string;
 		};
 		form?: { quickDraftSuccess?: boolean; quickDraftError?: string } | null;
-	}>();
+	} = $props();
 
 	let quickDraftTitle = $state('');
 	let quickDraftContent = $state('');
@@ -78,11 +78,11 @@
 			<div class="sp-card-body" style="padding:0;">
 				<div style="display:grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--sp-border);">
 					{#each [
-						{ label: 'Posts', count: data.stats.totalPosts, href: '/sp-admin/posts', icon: '📝' },
-						{ label: 'Pages', count: data.stats.totalPages, href: '/sp-admin/pages', icon: '📄' },
-						{ label: 'Comments', count: data.stats.totalComments, href: '/sp-admin/comments', icon: '💬' },
-						{ label: 'Media', count: data.stats.totalMedia, href: '/sp-admin/media', icon: '🖼️' },
-						{ label: 'Users', count: data.stats.totalUsers, href: '/sp-admin/users', icon: '👥' },
+						{ label: data.stats.totalPosts === 1 ? 'Post' : 'Posts', count: data.stats.totalPosts, href: '/sp-admin/posts', icon: '📝' },
+						{ label: data.stats.totalPages === 1 ? 'Page' : 'Pages', count: data.stats.totalPages, href: '/sp-admin/pages', icon: '📄' },
+						{ label: data.stats.totalComments === 1 ? 'Comment' : 'Comments', count: data.stats.totalComments, href: '/sp-admin/comments', icon: '💬' },
+						{ label: data.stats.totalMedia === 1 ? 'Media File' : 'Media Files', count: data.stats.totalMedia, href: '/sp-admin/media', icon: '🖼️' },
+						{ label: data.stats.totalUsers === 1 ? 'User' : 'Users', count: data.stats.totalUsers, href: '/sp-admin/users', icon: '👥' },
 					] as stat}
 						<a
 							href={stat.href}

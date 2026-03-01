@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 
-	let { form } = $props<{
+	let { form }: {
 		form?: { error?: string } | null;
-	}>();
+	} = $props();
 
 	let showPassword = $state(false);
 	let submitting = $state(false);

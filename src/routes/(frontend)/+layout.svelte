@@ -92,9 +92,18 @@
 
 			<div class="fp-widget">
 				<h3 class="fp-widget-title">Categories</h3>
-				<p class="fp-widget-placeholder">
-					<a href="/">Browse posts</a>
-				</p>
+				{#if data.sidebarCategories && data.sidebarCategories.length > 0}
+					<ul class="fp-archive-list">
+						{#each data.sidebarCategories as cat}
+							<li class="fp-archive-item">
+								<a href="/category/{cat.slug}" class="fp-archive-link">{cat.name}</a>
+								<span class="fp-archive-count-badge">({cat.count})</span>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="fp-widget-placeholder"><a href="/">Browse posts</a></p>
+				{/if}
 			</div>
 
 			{#if data.archiveMonths && data.archiveMonths.length > 0}

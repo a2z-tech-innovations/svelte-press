@@ -133,8 +133,8 @@
 					<td style="min-width:140px;">
 						<div style="display:flex; flex-direction:column; gap:2px;">
 							<strong style="font-size:13px;">
-								{#if comment.authorUrl}
-									<a href={comment.authorUrl} target="_blank" style="color:var(--sp-text);text-decoration:none;">{comment.authorName}</a>
+								{#if comment.authorUrl && /^https?:\/\//i.test(comment.authorUrl)}
+									<a href={comment.authorUrl} target="_blank" rel="noopener noreferrer" style="color:var(--sp-text);text-decoration:none;">{comment.authorName}</a>
 								{:else}
 									{comment.authorName}
 								{/if}

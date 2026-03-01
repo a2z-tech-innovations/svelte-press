@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"author": "SveltePress",
 	"description": "A bold magazine-style theme with multi-column layouts and featured content areas.",
-	"screenshot": "/themes/magazine/screenshot.png",
+	"screenshot": "",
 	"supports": ["featured-images", "post-formats", "widgets", "custom-header"],
 	"menus": {
 		"primary": "Primary Navigation",

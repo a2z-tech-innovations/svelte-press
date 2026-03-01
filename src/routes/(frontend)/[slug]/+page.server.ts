@@ -255,7 +255,8 @@ export const actions: Actions = {
 				title: posts.title,
 				slug: posts.slug,
 				commentStatus: posts.commentStatus,
-				authorId: posts.authorId
+				authorId: posts.authorId,
+				postDate: posts.postDate
 			})
 			.from(posts)
 			.where(and(eq(posts.slug, slug), eq(posts.status, 'publish')))
@@ -269,11 +270,29 @@ export const actions: Actions = {
 			return fail(403, { error: 'Comments are closed on this post.' });
 		}
 
+		// Enforce discussion settings
+		const allOpts = db.select().from(options).all();
+		const opts: Record<string, string> = {};
+		for (const o of allOpts) opts[o.optionName] = o.optionValue;
+
+		if (opts['comment_registration'] === '1' && !event.locals.user) {
+			return fail(403, { error: 'You must be logged in to post a comment.' });
+		}
+
+		const closeDays = Number(opts['close_comments_days_old'] ?? 0);
+		if (closeDays > 0 && post.postDate) {
+			const ageMs = Date.now() - new Date(post.postDate).getTime();
+			if (ageMs > closeDays * 86400000) {
+				return fail(403, { error: 'Comments are closed for this post.' });
+			}
+		}
+
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const email = String(data.get('email') ?? '').trim();
 		const content = String(data.get('content') ?? '').trim();
-		const authorUrl = String(data.get('url') ?? '').trim();
+		const rawUrl = String(data.get('url') ?? '').trim();
+		const authorUrl = rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : '';
 		const parentIdRaw = data.get('parentId');
 		const parentId = parentIdRaw && String(parentIdRaw).trim() !== ''
 			? parseInt(String(parentIdRaw), 10) || null
@@ -284,6 +303,16 @@ export const actions: Actions = {
 		if (!email || !email.includes('@')) return fail(400, { error: 'A valid email is required.', name, email, content });
 		if (!content) return fail(400, { error: 'Comment content is required.', name, email, content });
 		if (content.length > 5000) return fail(400, { error: 'Comment is too long (max 5000 characters).', name, email, content });
+
+		// Check blacklist
+		const blacklist = opts['blacklist_keys'] ?? '';
+		if (blacklist.trim()) {
+			const blacklisted = blacklist.split('\n').map((w) => w.trim()).filter(Boolean);
+			const haystack = `${name} ${email} ${authorUrl} ${content}`.toLowerCase();
+			if (blacklisted.some((word) => word && haystack.includes(word.toLowerCase()))) {
+				return fail(400, { error: 'Your comment contains disallowed content.', name, email, content });
+			}
+		}
 
 		const ip = getClientAddress();
 

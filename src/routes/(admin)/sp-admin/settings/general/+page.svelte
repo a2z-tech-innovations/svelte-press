@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 
-	let { data, form } = $props<{
+	let { data, form }: {
 		data: { opts: Record<string, string> };
 		form?: { success?: boolean } | null;
-	}>();
+	} = $props();
 
 	const o = data.opts;
 	const roles = [

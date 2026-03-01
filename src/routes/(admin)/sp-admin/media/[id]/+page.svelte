@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { bytesToHuman, getMediaUrl, formatDate } from '$lib/utils.js';
 
-	let { data, form } = $props<{
+	let { data, form }: {
 		data: {
 			item: {
 				id: number;
@@ -21,7 +21,7 @@
 			};
 		};
 		form?: { success?: boolean; error?: string } | null;
-	}>();
+	} = $props();
 
 	let title = $state(data.item.originalName);
 	let alt = $state(data.item.alt ?? '');

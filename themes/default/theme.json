@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"author": "SveltePress",
 	"description": "The default SveltePress theme. Clean, fast, and fully featured.",
-	"screenshot": "/themes/default/screenshot.png",
+	"screenshot": "",
 	"supports": ["featured-images", "post-formats", "custom-logo", "widgets"],
 	"menus": {
 		"primary": "Primary Navigation",

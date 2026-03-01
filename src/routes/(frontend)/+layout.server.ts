@@ -1,6 +1,6 @@
 import type { LayoutServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { options, menus, menuItems } from '$lib/server/db/schema.js';
+import { options, menus, menuItems, terms } from '$lib/server/db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { getActiveThemeStyleUrl } from '$lib/server/themes/index.js';
 
@@ -76,6 +76,12 @@ export const load: LayoutServerLoad = async () => {
 		LIMIT 12
 	`);
 
+	const sidebarCategories = db
+		.select({ id: terms.id, name: terms.name, slug: terms.slug, count: terms.count })
+		.from(terms)
+		.where(eq(terms.taxonomy, 'category'))
+		.all();
+
 	return {
 		siteName,
 		siteDescription,
@@ -84,6 +90,7 @@ export const load: LayoutServerLoad = async () => {
 		themeCssUrl,
 		menuItems: navMenuItems,
 		archiveMonths,
-		permalinkStructure
+		permalinkStructure,
+		sidebarCategories
 	};
 };

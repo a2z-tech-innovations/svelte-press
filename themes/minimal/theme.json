@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"author": "SveltePress",
 	"description": "A clean, minimal theme focused on typography and readability.",
-	"screenshot": "/themes/minimal/screenshot.png",
+	"screenshot": "",
 	"supports": ["featured-images", "widgets"],
 	"menus": {
 		"primary": "Primary Navigation"

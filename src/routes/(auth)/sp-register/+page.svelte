@@ -7,7 +7,7 @@
 		displayName?: string;
 		errors?: Record<string, string>;
 	}
-	let { data, form } = $props<{ data: { canRegister: boolean }; form?: FormData | null }>();
+	let { data, form }: { data: { canRegister: boolean }; form?: FormData | null } = $props();
 	let loading = $state(false);
 </script>
 

@@ -8,3 +8,10 @@ data/*.db-wal
 static/uploads/**/*
 !static/uploads/.gitkeep
 .playwright-mcp/
+page-*.png
+page-*.jpeg
+*.png
+*.jpeg
+*.jpg
+bug.txt
+AGENT_BUG_REPORT.md

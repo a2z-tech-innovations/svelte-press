@@ -56,6 +56,12 @@ export const actions: Actions = {
 		if (!id) return fail(400, { error: 'Missing id.' });
 		if (id === locals.user!.id) return fail(400, { error: 'You cannot delete your own account.' });
 
+		const userToDelete = db.select({ role: users.role }).from(users).where(eq(users.id, id)).get();
+		if (userToDelete?.role === 'admin') {
+			const [{ adminCount }] = db.select({ adminCount: count() }).from(users).where(eq(users.role, 'admin')).all();
+			if (Number(adminCount) <= 1) return fail(400, { error: 'Cannot delete the last administrator.' });
+		}
+
 		await db.delete(users).where(eq(users.id, id));
 
 		return { success: true };

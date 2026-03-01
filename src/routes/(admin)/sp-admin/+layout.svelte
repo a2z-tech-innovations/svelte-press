@@ -15,16 +15,19 @@
 	let sidebarOpen = $state(true);
 	let userMenuOpen = $state(false);
 
-	// Expandable sidebar menus
-	let expanded = $state<Record<string, boolean>>({
-		posts: false,
-		media: false,
-		pages: false,
-		appearance: false,
-		users: false,
-		settings: false,
-		tools: false
-	});
+	// Expandable sidebar menus — initialize synchronously from current pathname
+	function computeExpanded(pathname: string): Record<string, boolean> {
+		return {
+			posts: pathname.includes('/sp-admin/posts') || pathname.includes('/sp-admin/categories') || pathname.includes('/sp-admin/tags'),
+			media: pathname.includes('/sp-admin/media'),
+			pages: pathname.includes('/sp-admin/pages'),
+			appearance: pathname.includes('/sp-admin/themes') || pathname.includes('/sp-admin/menus') || pathname.includes('/sp-admin/widgets'),
+			users: pathname.includes('/sp-admin/users') || pathname.includes('/sp-admin/profile'),
+			settings: pathname.includes('/sp-admin/settings'),
+			tools: pathname.includes('/sp-admin/tools') || pathname.includes('/sp-admin/activity')
+		};
+	}
+	let expanded = $state<Record<string, boolean>>(computeExpanded(page.url.pathname));
 
 	function toggle(key: string) {
 		expanded[key] = !expanded[key];
@@ -62,7 +65,7 @@
 	);
 </script>
 
-<svelte:window on:click={(e) => {
+<svelte:window onclick={(e) => {
 	if (userMenuOpen && !(e.target as Element).closest?.('.sp-user-menu')) {
 		userMenuOpen = false;
 	}
@@ -184,7 +187,7 @@
 					</svg>
 					Comments
 					{#if data.pendingComments > 0}
-						<span class="sp-count-badge warning" style="margin-left:auto">{data.pendingComments}</span>
+						<span class="sp-count-badge warning" style="margin-left:auto" title="{data.pendingComments} pending">{data.pendingComments}</span>
 					{/if}
 				</a>
 			</div>

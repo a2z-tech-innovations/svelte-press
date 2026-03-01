@@ -26,7 +26,7 @@
 	</div>
 	<div class="fp-comment-body">
 		<div class="fp-comment-meta">
-			{#if comment.authorUrl}
+			{#if comment.authorUrl && /^https?:\/\//i.test(comment.authorUrl)}
 				<a href={comment.authorUrl} class="fp-comment-author" rel="nofollow ugc" target="_blank">
 					{comment.authorName}
 				</a>

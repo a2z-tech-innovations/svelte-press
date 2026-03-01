@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { initials, formatDate } from '$lib/utils.js';
 
-	let { data, form } = $props<{
+	let { data, form }: {
 		data: {
 			users: Array<{
 				id: number;
@@ -21,7 +21,7 @@
 			currentUserId: number;
 		};
 		form?: { success?: boolean; error?: string } | null;
-	}>();
+	} = $props();
 
 	const roles = [
 		{ key: '', label: 'All' },
