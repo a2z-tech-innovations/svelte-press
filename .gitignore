@@ -14,4 +14,4 @@ page-*.jpeg
 *.jpeg
 *.jpg
 bug.txt
-AGENT_BUG_REPORT.md
+AGENT_BUG_REPORT.mdcoverage/
