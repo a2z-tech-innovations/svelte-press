@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { formatDate } from '$lib/utils.js';
-	import BlockEditor from '$lib/components/blocks/BlockEditor.svelte';
-	import type { Block } from '$lib/types/index.js';
+	import TiptapEditor from '$lib/components/editor/TiptapEditor.svelte';
+	import type { JSONContent } from '@tiptap/core';
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form?: ActionData } = $props();
@@ -21,7 +21,6 @@
 	let activeTab = $state<'post' | 'block'>('post');
 	let activePanelSection = $state('status');
 	let saving = $state(false);
-	let submitStatus = $state(data.post.status);
 
 	function toggleSection(key: string) {
 		activePanelSection = activePanelSection === key ? '' : key;
@@ -45,9 +44,13 @@
 	<div class="sp-notice sp-notice-success" style="position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:999;">Page updated.</div>
 {/if}
 
-<form method="POST" action="?/save" use:enhance={() => { saving = true; return async ({ update }) => { await update({ reset: false }); saving = false; }; }}>
+<form method="POST" action="?/save" use:enhance={({ formData, submitter }) => {
+	const s = submitter?.getAttribute('data-submit-status');
+	if (s) formData.set('status', s);
+	saving = true;
+	return async ({ update }) => { await update({ reset: false }); saving = false; };
+}}>
 	<input type="hidden" name="content" bind:value={content} />
-	<input type="hidden" name="status" bind:value={submitStatus} />
 	<input type="hidden" name="authorId" bind:value={authorId} />
 	<input type="hidden" name="slug" bind:value={slug} />
 	<input type="hidden" name="commentStatus" value={commentStatus} />
@@ -65,7 +68,7 @@
 						type="submit"
 						class="sp-btn sp-btn-secondary sp-btn-sm"
 						disabled={saving}
-						onclick={() => { submitStatus = status; }}
+						data-submit-status={status === 'publish' ? 'publish' : 'draft'}
 					>
 						{saving ? 'Saving…' : 'Save'}
 					</button>
@@ -74,14 +77,15 @@
 							type="submit"
 							class="sp-btn sp-btn-primary sp-btn-sm"
 							disabled={saving}
-							onclick={() => { submitStatus = 'publish'; status = 'publish'; }}
+							data-submit-status="publish"
+							onclick={() => { status = 'publish'; }}
 						>Publish</button>
 					{:else}
 						<button
 							type="submit"
 							class="sp-btn sp-btn-primary sp-btn-sm"
 							disabled={saving}
-							onclick={() => { submitStatus = 'publish'; }}
+							data-submit-status="publish"
 						>Update</button>
 					{/if}
 				{:else}
@@ -108,9 +112,9 @@
 						Permalink: <a href="/{slug}" target="_blank" style="color:var(--sp-primary)">/{slug}</a>
 					</div>
 					<div style="margin-top:24px;">
-						<BlockEditor
-							blocks={JSON.parse(content) as Block[]}
-							onchange={(newBlocks) => { content = JSON.stringify(newBlocks); }}
+						<TiptapEditor
+							initialContent={data.post?.content ?? null}
+							onchange={(json: JSONContent) => { content = JSON.stringify(json); }}
 						/>
 					</div>
 				</div>

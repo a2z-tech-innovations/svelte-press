@@ -1,7 +1,9 @@
 import { defineConfig } from 'vitest/config';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import path from 'path';
 
 export default defineConfig({
+	plugins: [svelte()],
 	resolve: {
 		alias: {
 			$lib: path.resolve('src/lib')
@@ -10,6 +12,9 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: 'node',
+		environmentMatchGlobs: [
+			['src/__tests__/editor/**', 'happy-dom']
+		],
 		setupFiles: ['./tests/setup.ts'],
 		include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
 		// Force UTC for consistent date testing across environments

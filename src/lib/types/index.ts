@@ -66,7 +66,7 @@ export interface Post {
 	id: number;
 	title: string;
 	slug: string;
-	content: Block[];
+	content: import('@tiptap/core').JSONContent | Block[];
 	excerpt: string;
 	status: PostStatus;
 	commentStatus: CommentStatus;
@@ -212,6 +212,14 @@ export interface PluginInfo {
 	description: string;
 	active: boolean;
 }
+
+// ─── Tiptap ───────────────────────────────────────────────────────────────────
+
+/** Re-export of Tiptap's JSONContent for use across the codebase */
+export type { JSONContent as TiptapDoc } from '@tiptap/core';
+
+/** Content stored in the posts.content column — either legacy Block[] or Tiptap JSON */
+export type PostContent = import('@tiptap/core').JSONContent | Block[];
 
 // ─── Revision ─────────────────────────────────────────────────────────────────
 

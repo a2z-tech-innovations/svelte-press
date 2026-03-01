@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { slugify, formatDate, getPermalinkUrl } from '$lib/utils.js';
-	import BlockEditor from '$lib/components/blocks/BlockEditor.svelte';
-	import type { Block } from '$lib/types/index.js';
+	import TiptapEditor from '$lib/components/editor/TiptapEditor.svelte';
+	import type { JSONContent } from '@tiptap/core';
 
 	import type { PageData, ActionData } from './$types.js';
 	let { data, form }: { data: PageData; form?: ActionData } = $props();
@@ -23,7 +23,6 @@
 	let tagInput = $state('');
 	let selectedTagIds = $state<Set<number>>(new Set(data.postTags.map((t) => t.id)));
 	let saving = $state(false);
-	let submitStatus = $state(status);
 
 	// Derive the canonical permalink URL from the current slug, post date, and permalink structure
 	let permalinkPreview = $derived(
@@ -59,9 +58,14 @@
 	<div class="sp-notice sp-notice-success" style="position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:999;">Post updated.</div>
 {/if}
 
-<form method="POST" action="?/save" use:enhance={() => { saving = true; return async ({ update }) => { await update({ reset: false }); saving = false; }; }}>
+<form method="POST" action="?/save" use:enhance={({ formData, submitter }) => {
+	// Inject status from data-submit-status attribute to avoid Svelte 5 DOM update race
+	const s = submitter?.getAttribute('data-submit-status');
+	if (s) formData.set('status', s);
+	saving = true;
+	return async ({ update }) => { await update({ reset: false }); saving = false; };
+}}>
 	<input type="hidden" name="content" bind:value={content} />
-	<input type="hidden" name="status" bind:value={submitStatus} />
 	<input type="hidden" name="authorId" bind:value={authorId} />
 	<input type="hidden" name="slug" bind:value={slug} />
 	<input type="hidden" name="commentStatus" value={commentStatus} />
@@ -89,7 +93,7 @@
 						type="submit"
 						class="sp-btn sp-btn-secondary sp-btn-sm"
 						disabled={saving}
-						onclick={() => { submitStatus = status === 'publish' ? 'publish' : 'draft'; }}
+						data-submit-status={status === 'publish' ? 'publish' : 'draft'}
 					>
 						{saving ? 'Saving…' : 'Save'}
 					</button>
@@ -98,7 +102,8 @@
 							type="submit"
 							class="sp-btn sp-btn-primary sp-btn-sm"
 							disabled={saving}
-							onclick={() => { submitStatus = 'publish'; status = 'publish'; }}
+							data-submit-status="publish"
+							onclick={() => { status = 'publish'; }}
 						>
 							Publish
 						</button>
@@ -107,7 +112,7 @@
 							type="submit"
 							class="sp-btn sp-btn-primary sp-btn-sm"
 							disabled={saving}
-							onclick={() => { submitStatus = 'publish'; }}
+							data-submit-status="publish"
 						>
 							Update
 						</button>
@@ -145,9 +150,9 @@
 						</span>
 					</div>
 					<div style="margin-top:24px;">
-						<BlockEditor
-							blocks={JSON.parse(content) as Block[]}
-							onchange={(newBlocks) => { content = JSON.stringify(newBlocks); }}
+						<TiptapEditor
+							initialContent={data.post?.content ?? null}
+							onchange={(json: JSONContent) => { content = JSON.stringify(json); }}
 						/>
 					</div>
 				</div>
@@ -172,7 +177,7 @@
 								<div class="sp-panel-section-body">
 									<div class="sp-field">
 										<label class="sp-label">Status</label>
-										<select class="sp-select" bind:value={status} onchange={() => { submitStatus = status; }}>
+										<select class="sp-select" bind:value={status}>
 											<option value="draft">Draft</option>
 											<option value="pending">Pending Review</option>
 											<option value="publish">Published</option>

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { slugify } from '$lib/utils.js';
-	import BlockEditor from '$lib/components/blocks/BlockEditor.svelte';
-	import type { Block } from '$lib/types/index.js';
+	import TiptapEditor from '$lib/components/editor/TiptapEditor.svelte';
+	import type { JSONContent } from '@tiptap/core';
 	import type { PageData, ActionData } from './$types.js';
 
 	let { data, form }: { data: PageData; form?: ActionData } = $props();
@@ -105,9 +105,9 @@
 						required
 					/>
 					<div style="margin-top:24px;">
-						<BlockEditor
-							blocks={JSON.parse(content) as Block[]}
-							onchange={(newBlocks) => { content = JSON.stringify(newBlocks); }}
+						<TiptapEditor
+							initialContent={null}
+							onchange={(json: JSONContent) => { content = JSON.stringify(json); }}
 						/>
 					</div>
 				</div>

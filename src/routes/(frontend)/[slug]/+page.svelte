@@ -4,10 +4,13 @@
 	import { enhance } from '$app/forms';
 	import Comment from '$lib/components/Comment.svelte';
 	import GalleryLightbox from '$lib/components/GalleryLightbox.svelte';
+	import { isTiptapDoc, isLegacyBlocks } from '$lib/editor/backward-compat.js';
+	import { getExtensions } from '$lib/editor/extensions/index.js';
+	import { tiptapToHtml } from '$lib/editor/html-export.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	// Block renderer
+	// Block renderer (legacy format)
 	function renderBlock(block: { id?: string; type: string; content: string; attrs: Record<string, unknown> }): string {
 		switch (block.type) {
 			case 'paragraph':
@@ -89,12 +92,21 @@
 			.join('\n');
 	}
 
-	let renderedContent = $derived(renderBlocks(data.post.content));
+	let renderedContent = $derived(() => {
+		const c = data.post.content;
+		if (isTiptapDoc(c)) {
+			return tiptapToHtml(c, getExtensions());
+		}
+		if (isLegacyBlocks(c)) {
+			return renderBlocks(c as unknown[]);
+		}
+		return '';
+	});
 	let isPost = $derived(data.post.postType === 'post');
 
-	// Collect gallery blocks so GalleryLightbox can access image data
+	// Collect gallery blocks so GalleryLightbox can access image data (legacy format only)
 	let galleryBlocks = $derived(
-		Array.isArray(data.post.content)
+		isLegacyBlocks(data.post.content)
 			? (data.post.content as Array<{ id: string; type: string; attrs: Record<string, unknown> }>).filter(
 					(b) => b.type === 'gallery'
 				)
@@ -194,7 +206,7 @@
 	</header>
 
 	<div class="fp-single-content">
-		{@html renderedContent}
+		{@html renderedContent()}
 	</div>
 
 	{#if isPost && data.tags.length > 0}
