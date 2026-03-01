@@ -61,6 +61,7 @@
 	<input type="hidden" name="status" bind:value={status} />
 	<input type="hidden" name="authorId" bind:value={authorId} />
 	<input type="hidden" name="slug" bind:value={slug} />
+	<input type="hidden" name="sticky" value={sticky ? '1' : '0'} />
 	{#if visibility === 'password'}
 		<input type="hidden" name="postPassword" bind:value={postPassword} />
 	{/if}

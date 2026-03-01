@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Editor } from '@tiptap/core';
 	import type { Node } from '@tiptap/pm/model';
+	import BlockControls from './BlockControls.svelte';
 
 	let {
 		node,
@@ -15,6 +16,8 @@
 	let rawHtml = $derived((node.attrs.rawHtml as string) ?? '');
 	let htmlInput = $state(rawHtml);
 	let preview = $state(false);
+
+	$effect(() => { htmlInput = rawHtml; });
 
 	function save() {
 		const pos = getPos();
@@ -47,12 +50,12 @@
 		></textarea>
 	{/if}
 </div>
+<BlockControls {editor} {getPos} {node} />
 
 <style>
 	.sp-html-nv {
 		border: 2px solid var(--sp-border, #c3c4c7);
 		border-radius: 4px;
-		overflow: hidden;
 	}
 
 	.sp-html-header {

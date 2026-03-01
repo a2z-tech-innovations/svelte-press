@@ -79,7 +79,7 @@
 	.sp-block-controls {
 		position: absolute;
 		top: 4px;
-		right: -80px;
+		right: 4px;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -89,9 +89,6 @@
 		padding: 3px;
 		box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 		z-index: 10;
-		opacity: 0;
-		pointer-events: none;
-		transition: opacity 0.15s;
 	}
 
 	.sp-block-ctrl-btn {

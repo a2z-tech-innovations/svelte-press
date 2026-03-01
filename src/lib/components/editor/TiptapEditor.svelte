@@ -180,7 +180,13 @@
 		position: relative;
 	}
 
-	/* Show block controls on hover */
+	/* Block controls: hidden by default, shown on hover */
+	:global(.sp-block-controls) {
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.15s;
+	}
+
 	:global([data-node-view-wrapper]:hover .sp-block-controls) {
 		opacity: 1;
 		pointer-events: all;

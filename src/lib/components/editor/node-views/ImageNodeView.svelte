@@ -2,6 +2,7 @@
 	import type { Editor } from '@tiptap/core';
 	import type { Node } from '@tiptap/pm/model';
 	import MediaPickerDialog from '../MediaPickerDialog.svelte';
+	import BlockControls from './BlockControls.svelte';
 
 	let {
 		node,
@@ -18,6 +19,8 @@
 
 	let pickerOpen = $state(false);
 	let altInput = $state(alt);
+
+	$effect(() => { altInput = alt; });
 
 	function updateAttrs(attrs: Record<string, string>) {
 		const pos = getPos();
@@ -62,6 +65,7 @@
 	{/if}
 </div>
 
+<BlockControls {editor} {getPos} {node} />
 <MediaPickerDialog bind:open={pickerOpen} onselect={onImageSelected} />
 
 <style>

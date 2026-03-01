@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Editor } from '@tiptap/core';
 	import type { Node } from '@tiptap/pm/model';
+	import BlockControls from './BlockControls.svelte';
 
 	let {
 		node,
@@ -14,6 +15,8 @@
 
 	let code = $derived((node.attrs.code as string) ?? '');
 	let codeInput = $state(code);
+
+	$effect(() => { codeInput = code; });
 
 	function save() {
 		const pos = getPos();
@@ -37,12 +40,12 @@
 		style="font-family:monospace;font-size:13px;width:100%;"
 	/>
 </div>
+<BlockControls {editor} {getPos} {node} />
 
 <style>
 	.sp-shortcode-nv {
 		border: 2px solid var(--sp-border, #c3c4c7);
 		border-radius: 4px;
-		overflow: hidden;
 	}
 
 	.sp-shortcode-header {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Editor } from '@tiptap/core';
 	import type { Node } from '@tiptap/pm/model';
+	import BlockControls from './BlockControls.svelte';
 
 	let {
 		node,
@@ -19,6 +20,10 @@
 	let urlInput = $state(url);
 	let targetInput = $state(target);
 	let styleInput = $state(btnStyle);
+
+	$effect(() => { urlInput = url; });
+	$effect(() => { targetInput = target; });
+	$effect(() => { styleInput = btnStyle; });
 
 	function save() {
 		const pos = getPos();
@@ -61,6 +66,7 @@
 		</div>
 	</div>
 </div>
+<BlockControls {editor} {getPos} {node} />
 
 <style>
 	.sp-button-nv {

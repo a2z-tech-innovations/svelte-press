@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Editor } from '@tiptap/core';
 	import type { Node } from '@tiptap/pm/model';
+	import BlockControls from './BlockControls.svelte';
 
 	let {
 		node,
@@ -17,6 +18,9 @@
 
 	let urlInput = $state(url);
 	let captionInput = $state(caption);
+
+	$effect(() => { urlInput = url; });
+	$effect(() => { captionInput = caption; });
 
 	function save() {
 		const pos = getPos();
@@ -61,6 +65,7 @@
 		/>
 	</div>
 </div>
+<BlockControls {editor} {getPos} {node} />
 
 <style>
 	.sp-video-nv {

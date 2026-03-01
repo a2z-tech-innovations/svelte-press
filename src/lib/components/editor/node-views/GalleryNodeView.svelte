@@ -2,6 +2,7 @@
 	import type { Editor } from '@tiptap/core';
 	import type { Node } from '@tiptap/pm/model';
 	import MediaPickerDialog from '../MediaPickerDialog.svelte';
+	import BlockControls from './BlockControls.svelte';
 
 	interface GalleryImage {
 		src: string;
@@ -73,6 +74,7 @@
 	{/if}
 </div>
 
+<BlockControls {editor} {getPos} {node} />
 <MediaPickerDialog bind:open={pickerOpen} onselect={addImage} />
 
 <style>

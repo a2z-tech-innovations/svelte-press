@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Editor } from '@tiptap/core';
 	import type { Node } from '@tiptap/pm/model';
+	import BlockControls from './BlockControls.svelte';
 
 	let {
 		node,
@@ -37,6 +38,7 @@
 		/>
 	</div>
 </div>
+<BlockControls {editor} {getPos} {node} />
 
 <style>
 	.sp-spacer-nv {

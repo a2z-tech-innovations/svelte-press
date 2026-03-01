@@ -40,6 +40,9 @@
 		if (!url) {
 			editor.chain().focus().unsetLink().run();
 		} else {
+			// Block javascript: / data: / vbscript: protocols
+			const safe = /^(https?:\/\/|\/|#|mailto:|tel:)/i.test(url);
+			if (!safe) return;
 			editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
 		}
 		showLinkInput = false;
