@@ -1,15 +1,15 @@
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { users } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
-import { sendEmail } from '$lib/server/email/index.js';
+import { auth } from '$lib/auth.js';
 
-export const load: PageServerLoad = async () => ({ sent: false, devToken: '' });
+export const load: PageServerLoad = async ({ url }) => {
+	const token = url.searchParams.get('token');
+	return { sent: false, devToken: '', token };
+};
 
 export const actions: Actions = {
-	default: async (event) => {
+	// Step 1: user enters email to request a reset link
+	requestReset: async (event) => {
 		const data = await event.request.formData();
 		const email = String(data.get('email') ?? '').trim();
 
@@ -17,37 +17,48 @@ export const actions: Actions = {
 			return fail(400, { error: 'Please enter a valid email address.' });
 		}
 
-		const user = db.select().from(users).where(eq(users.email, email)).get();
-
+		// BA handles token generation, email sending, and token storage
 		// Always show success to prevent email enumeration
-		if (!user) {
-			return { sent: true, devToken: '', email };
+		await auth.api
+			.requestPasswordReset({
+				body: {
+					email,
+					// BA will append ?token=... to this URL in the reset email
+					redirectTo: `${event.url.origin}/sp-forgot-password`
+				},
+				headers: event.request.headers
+			})
+			.catch(() => {}); // fire-and-forget — errors don't leak to user
+
+		return { sent: true, devToken: '', email };
+	},
+
+	// Step 2: user clicks reset link (?token=...) and sets new password
+	resetPassword: async (event) => {
+		const data = await event.request.formData();
+		const token = String(data.get('token') ?? '').trim();
+		const newPassword = String(data.get('newPassword') ?? '');
+		const confirmPassword = String(data.get('confirmPassword') ?? '');
+
+		if (!token) {
+			return fail(400, { resetError: 'Invalid or missing reset token.' });
+		}
+		if (!newPassword || newPassword.length < 8) {
+			return fail(400, { resetError: 'Password must be at least 8 characters.' });
+		}
+		if (newPassword !== confirmPassword) {
+			return fail(400, { resetError: 'Passwords do not match.' });
 		}
 
-		const resetToken = nanoid(32);
-		const resetUrl = `${event.url.origin}/sp-forgot-password?token=${resetToken}`;
-
-		const result = await sendEmail({
-			to: user.email,
-			subject: 'Reset your SveltePress password',
-			html: `
-				<h2>Password Reset</h2>
-				<p>Hi ${user.displayName},</p>
-				<p>Click the link below to reset your password. This link expires in 1 hour.</p>
-				<p><a href="${resetUrl}">${resetUrl}</a></p>
-				<p>If you did not request this, you can safely ignore this email.</p>
-			`,
-			text: `Reset your SveltePress password\n\nHi ${user.displayName},\n\nReset your password: ${resetUrl}\n\nIf you did not request this, you can safely ignore this email.`
-		});
-
-		if (!result.success) {
-			console.error('[ForgotPassword] Email send failed:', result.error);
+		try {
+			await auth.api.resetPassword({
+				body: { newPassword, token },
+				headers: event.request.headers
+			});
+		} catch {
+			return fail(400, { resetError: 'Invalid or expired reset token. Please request a new link.' });
 		}
 
-		// In dev (ethereal), surface the preview URL so the developer can inspect the email.
-		// In production with real SMTP, previewUrl will be undefined.
-		const devToken = result.previewUrl ?? resetToken;
-
-		return { sent: true, devToken, email };
+		redirect(302, '/sp-login');
 	}
 };

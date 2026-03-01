@@ -19,7 +19,13 @@ export const users = sqliteTable('users', {
 	registeredAt: integer('registered_at', { mode: 'timestamp' })
 		.notNull()
 		.default(sql`(unixepoch())`),
-	lastLogin: integer('last_login', { mode: 'timestamp' })
+	lastLogin: integer('last_login', { mode: 'timestamp' }),
+	// Better Auth required fields
+	emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
+	twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' }).default(false),
+	updatedAt: integer('updated_at', { mode: 'timestamp' })
+		.notNull()
+		.default(sql`(unixepoch())`)
 });
 
 // ─── Sessions ────────────────────────────────────────────────────────────────
@@ -27,17 +33,70 @@ export const users = sqliteTable('users', {
 export const sessions = sqliteTable(
 	'sessions',
 	{
-		id: text('id').primaryKey(), // nanoid
+		id: text('id').primaryKey(),
 		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
+			.default(sql`(unixepoch())`),
+		// Better Auth required fields
+		token: text('token').notNull().unique(),
+		ipAddress: text('ip_address'),
+		userAgent: text('user_agent'),
+		updatedAt: integer('updated_at', { mode: 'timestamp' })
+			.notNull()
 			.default(sql`(unixepoch())`)
 	},
-	(t) => [index('sessions_user_id_idx').on(t.userId)]
+	(t) => [index('sessions_user_id_idx').on(t.userId), index('sessions_token_idx').on(t.token)]
 );
+
+// ─── Better Auth Tables ───────────────────────────────────────────────────────
+
+export const account = sqliteTable(
+	'account',
+	{
+		id: text('id').primaryKey(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		accountId: text('account_id').notNull(),
+		providerId: text('provider_id').notNull(),
+		password: text('password'),
+		accessToken: text('access_token'),
+		refreshToken: text('refresh_token'),
+		accessTokenExpiresAt: integer('access_token_expires_at', { mode: 'timestamp' }),
+		refreshTokenExpiresAt: integer('refresh_token_expires_at', { mode: 'timestamp' }),
+		scope: text('scope'),
+		idToken: text('id_token'),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`),
+		updatedAt: integer('updated_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`)
+	},
+	(t) => [index('account_user_id_idx').on(t.userId)]
+);
+
+export const verification = sqliteTable('verification', {
+	id: text('id').primaryKey(),
+	identifier: text('identifier').notNull(),
+	value: text('value').notNull(),
+	expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+	createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+	updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`(unixepoch())`)
+});
+
+export const twoFactor = sqliteTable('two_factor', {
+	id: text('id').primaryKey(),
+	userId: integer('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	secret: text('secret').notNull(),
+	backupCodes: text('backup_codes').notNull().default('[]')
+});
 
 // ─── Media ───────────────────────────────────────────────────────────────────
 

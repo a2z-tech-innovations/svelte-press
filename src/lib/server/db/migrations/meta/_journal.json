@@ -15,6 +15,13 @@
       "when": 1772304776602,
       "tag": "0001_dark_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1772383602245,
+      "tag": "0002_legal_tenebrous",
+      "breakpoints": true
     }
   ]
 }
