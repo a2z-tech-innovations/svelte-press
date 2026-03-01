@@ -21,6 +21,7 @@ Git repo on `master`
 | Auth | Custom session table (nanoid tokens, HTTP-only cookies) |
 | Images | `sharp` for thumbnail generation |
 | Email | `nodemailer` (ethereal.email in dev, real SMTP via env vars in prod) |
+| Testing | Vitest + @testing-library/svelte + happy-dom |
 | Package manager | **pnpm** (never npm or bun) |
 | Deployment | `@sveltejs/adapter-node` |
 
@@ -521,6 +522,9 @@ pnpm dev           # dev server on :5173
 pnpm build         # production build → build/
 pnpm preview       # preview production build
 pnpm check         # TypeScript + Svelte type check
+pnpm test          # run unit tests (Vitest)
+pnpm test:watch    # run tests in watch mode
+pnpm test:coverage # run tests with v8 coverage report
 pnpm db:generate   # generate Drizzle migration from schema
 pnpm db:migrate    # apply migrations to SQLite DB
 pnpm db:seed       # seed defaults (idempotent)

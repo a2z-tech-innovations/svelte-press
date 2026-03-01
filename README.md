@@ -4,7 +4,7 @@
 
 A full-featured, open-source WordPress clone built from scratch with SvelteKit 2, Svelte 5, TypeScript, and SQLite. Familiar WordPress-style admin, Gutenberg-style block editor, plugin hooks, theme switching, and a clean public frontend — with zero PHP.
 
-**License:** MIT &nbsp;|&nbsp; **Stack:** SvelteKit 2 · Svelte 5 · TypeScript · SQLite · Drizzle ORM · Tailwind CSS v4
+**License:** MIT &nbsp;|&nbsp; **Stack:** SvelteKit 2 · Svelte 5 · TypeScript · SQLite · Drizzle ORM · Tailwind CSS v4 · Vitest
 
 ---
 
@@ -111,6 +111,7 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **oEmbed** — `/api/oembed` proxy resolves YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok embed HTML
 - **Drizzle ORM** — Type-safe SQLite queries; schema migrations via `drizzle-kit`
 - **Svelte 5 runes** — All state via `$state`, `$derived`, `$effect`; no legacy stores
+- **Unit tests** — Vitest + @testing-library/svelte; 204 tests covering utils, permissions, route matchers, plugin hooks, API auth, and post loading
 
 ---
 
@@ -420,6 +421,15 @@ Pull requests are welcome. For significant changes, open an issue first.
 ```bash
 # Run type checking
 pnpm check
+
+# Run unit tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Run tests with coverage report
+pnpm test:coverage
 
 # Start dev server
 pnpm dev
