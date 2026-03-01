@@ -75,11 +75,11 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **Built-in widgets** — Search, Recent Posts, Recent Comments, Archives (with month links), Categories, Tag Cloud, Text, Custom HTML
 
 ### Authentication
-- **Session-based auth** — Thin custom session table (nanoid tokens, HTTP-only cookies, 30-day expiry)
+- **Better Auth** — Session management via [better-auth](https://better-auth.com) v1.5; HTTP-only `sp_session` cookie, 30-day expiry
 - **Login / Register / Forgot Password** — Full auth flow at `/sp-login`, `/sp-register`, `/sp-forgot-password`
-- **Password reset email** — Sends via SMTP (or ethereal.email in dev for preview)
-- **Secure password hashing** — bcryptjs
-- **Two-factor authentication** — TOTP via authenticator app with backup codes
+- **Password reset email** — Token-based reset link emailed via SMTP (or ethereal.email in dev); `/sp-forgot-password?token=` handles the reset form
+- **Secure password hashing** — bcryptjs (existing hashes migrate automatically)
+- **Two-factor authentication** — TOTP via authenticator app with backup codes; setup QR code generated on profile page
 
 ### Permalinks
 - **Six URL structures** — Plain (`?p=123`), Day+name, Month+name, Numeric (`/archives/123`), Post name, Custom
@@ -111,7 +111,7 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **oEmbed** — `/api/oembed` proxy resolves YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok embed HTML
 - **Drizzle ORM** — Type-safe SQLite queries; schema migrations via `drizzle-kit`
 - **Svelte 5 runes** — All state via `$state`, `$derived`, `$effect`; no legacy stores
-- **Unit tests** — Vitest + @testing-library/svelte; 204 tests covering utils, permissions, route matchers, plugin hooks, API auth, and post loading
+- **Unit tests** — Vitest + @testing-library/svelte; 260 tests covering utils, permissions, route matchers, plugin hooks, API auth, post loading, session lifecycle, and 2FA flows
 
 ---
 
@@ -123,8 +123,9 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 # 1. Install dependencies
 pnpm install
 
-# 2. Copy environment file
+# 2. Copy environment file and set BETTER_AUTH_SECRET
 cp .env.example .env
+# Edit .env and set BETTER_AUTH_SECRET to a random 32+ character string
 
 # 3. Generate and run database migrations
 pnpm db:generate
@@ -136,6 +137,14 @@ pnpm db:seed
 # 5. Start the dev server
 pnpm dev
 ```
+
+**Migrating an existing database?** Run the one-time migration script after applying migrations:
+
+```bash
+pnpm tsx scripts/migrate-to-better-auth.ts
+```
+
+This populates the `account` table with existing password hashes and migrates session tokens so active logins are preserved.
 
 The app is now running at **http://localhost:5173**.
 
@@ -383,10 +392,11 @@ svelte-press/
 │   │   │   ├── blocks/          # 21 block editor components
 │   │   │   ├── GalleryLightbox.svelte  # Full-screen gallery lightbox
 │   │   │   └── Comment.svelte   # Recursive threaded comment component
+│   │   ├── auth.ts              # Better Auth config (drizzle adapter, twoFactor plugin, bcrypt)
+│   │   ├── auth-client.ts       # SvelteKit client helper (twoFactorClient plugin)
 │   │   ├── server/
 │   │   │   ├── activity/        # logActivity() helper + activity_log table
 │   │   │   ├── api/             # REST API auth helpers
-│   │   │   ├── auth/            # Session create/validate/delete
 │   │   │   ├── db/              # Drizzle schema, migrations, seed
 │   │   │   ├── email/           # nodemailer email service
 │   │   │   ├── media/           # sharp image processing

@@ -18,7 +18,7 @@ Git repo on `master`
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS v4 (via `@tailwindcss/vite`) |
 | Database | SQLite via `better-sqlite3` + Drizzle ORM |
-| Auth | Custom session table (nanoid tokens, HTTP-only cookies) |
+| Auth | Better Auth v1.5 (`better-auth`) — drizzle adapter, twoFactor plugin |
 | Images | `sharp` for thumbnail generation |
 | Email | `nodemailer` (ethereal.email in dev, real SMTP via env vars in prod) |
 | Testing | Vitest + @testing-library/svelte + happy-dom |
@@ -155,7 +155,7 @@ const rows = db.all<{ year: string; month: string; count: number }>(sql`
 ```
 
 **Schema location**: `src/lib/server/db/schema.ts`
-**Exported tables**: `users`, `sessions`, `posts`, `terms`, `postTerms`, `comments`, `media`, `options`, `menus`, `menuItems`, `postMeta`, `userMeta`, `revisions`, `widgets`
+**Exported tables**: `users`, `sessions`, `posts`, `terms`, `postTerms`, `comments`, `media`, `options`, `menus`, `menuItems`, `postMeta`, `userMeta`, `revisions`, `widgets`, `account`, `verification`, `twoFactor`
 
 There is NO separate `pages` table — pages are `posts` rows with `postType = 'page'`.
 
@@ -170,15 +170,38 @@ pnpm db:seed       # re-seed defaults (idempotent)
 
 ## Auth
 
-- Session cookie name: `SESSION_COOKIE` from `$lib/server/auth/index.js`
-- Session duration: 30 days
-- `locals.user` — `User | null` available in all server files
-- `locals.sessionId` — `string | null`
+Auth is handled by **Better Auth** v1.5. Config at `src/lib/auth.ts`. Client helper at `src/lib/auth-client.ts`.
 
-Auth guard pattern for admin layout:
+- Session cookie name: `sp_session` (HTTP-only, 30-day expiry)
+- `locals.user` — `User | null` populated in `hooks.server.ts` via `auth.api.getSession()`
+- `locals.sessionId` — `string | null` (the session token)
+- Login: `auth.api.signInEmail` (accepts username-or-email lookup first, then passes email to BA)
+- Register: `auth.api.signUpEmail` + follow-up DB patch for `username` / `role`
+- Password reset: `auth.api.forgetPassword` / `auth.api.resetPassword`
+- 2FA: `twoFactor` plugin — `auth.api.verifyTOTP` / `auth.api.verifyBackupCode`
+- Logout: `auth.api.signOut`
+- **`BETTER_AUTH_SECRET`** env var must be set; used for session signing and TOTP secret encryption
+- **Do NOT** import from `$lib/server/auth/index.js` — that file no longer exists
+
+Auth guard pattern for admin layout (unchanged):
 ```ts
 // +layout.server.ts
 if (!locals.user) redirect(302, '/sp-login');
+```
+
+2FA login flow:
+1. `signInEmail` returns `{ twoFactorRedirect: true }` → set `sp_2fa_pending` cookie → redirect to `?step=2fa`
+2. User enters code → `verify2faLogin` action → `auth.api.verifyTOTP` (falls back to `verifyBackupCode`)
+3. Success → delete `sp_2fa_pending` cookie → redirect to dashboard
+
+**SvelteKit `redirect()` inside `try/catch`**: always re-throw with `isRedirect(e)`:
+```ts
+import { fail, redirect, isRedirect } from '@sveltejs/kit';
+// ...
+} catch (e) {
+  if (isRedirect(e)) throw e;
+  return fail(400, { error: 'Invalid credentials.' });
+}
 ```
 
 ---
@@ -522,13 +545,14 @@ pnpm dev           # dev server on :5173
 pnpm build         # production build → build/
 pnpm preview       # preview production build
 pnpm check         # TypeScript + Svelte type check
-pnpm test          # run unit tests (Vitest)
+pnpm test          # run unit tests (Vitest) — 260 tests
 pnpm test:watch    # run tests in watch mode
 pnpm test:coverage # run tests with v8 coverage report
 pnpm db:generate   # generate Drizzle migration from schema
 pnpm db:migrate    # apply migrations to SQLite DB
 pnpm db:seed       # seed defaults (idempotent)
 pnpm db:studio     # Drizzle Studio GUI
+pnpm tsx scripts/migrate-to-better-auth.ts  # one-time migration for existing DBs
 ```
 
 Default login: **admin / password** at `http://localhost:5173/sp-login`
@@ -539,8 +563,8 @@ Default login: **admin / password** at `http://localhost:5173/sp-login`
 
 All features are complete and working end-to-end:
 
-- **Auth** — login, register, forgot-password (sends real email via nodemailer/ethereal), session middleware
-- **Two-factor authentication** — TOTP setup via QR code, backup codes, enable/disable from profile; 2FA step on login
+- **Auth** — Better Auth v1.5: login (username or email), register, forgot-password with token-based reset (sends real email), session middleware; cookie name `sp_session` preserved
+- **Two-factor authentication** — TOTP setup via QR code, backup codes, enable/disable from profile; 2FA step on login via BA `twoFactor` plugin
 - **Admin layout** — dark sidebar, adminbar, all nav, logout
 - **Dashboard** — stats, quick draft, recent activity, welcome panel
 - **Posts & Pages CRUD** — list, new, edit (with block editor), trash/restore (preserves pre-trash status), visibility selector
@@ -602,3 +626,5 @@ None.
 16. **Permalink URLs**: All listing pages (home, category, tag, author, search, date archive) must call `getPermalinkUrl(post, data.permalinkStructure)` — never hardcode `/${post.slug}`.
 17. **Activity logging**: All significant admin mutations must call `logActivity(...).catch(() => {})` — fire-and-forget, never throw.
 18. **Nested forms**: Never place a `<form>` inside the main editor save form. For secondary actions (trash, restore), add standalone `<form id="sp-trash-form">` / `<form id="sp-restore-form">` after the closing `</form>` and reference them via `form="sp-trash-form"` on the button.
+19. **Better Auth calls inside try/catch**: `redirect()` from `@sveltejs/kit` throws; always re-throw with `if (isRedirect(e)) throw e` to prevent the catch block from swallowing SvelteKit redirects.
+20. **BETTER_AUTH_SECRET**: Must be consistent between `.env` and `getSecret()` fallback in `profile/+page.server.ts`. Both BA (for cookie signing) and our TOTP encryption use this value — a mismatch causes silent 2FA verification failures.
