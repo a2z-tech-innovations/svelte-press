@@ -2,9 +2,9 @@
 
 > Built by [A to Z Tech Innovations LLC](https://a2ztech.io)
 
-A full-featured, open-source WordPress clone built from scratch with SvelteKit 2, Svelte 5, TypeScript, and SQLite. Familiar WordPress-style admin, Gutenberg-style block editor, plugin hooks, theme switching, and a clean public frontend — with zero PHP.
+A full-featured, open-source WordPress clone built from scratch with SvelteKit 2, Svelte 5, TypeScript, and SQLite. Familiar WordPress-style admin, Tiptap-powered rich text editor, plugin hooks, theme switching, and a clean public frontend — with zero PHP.
 
-**License:** MIT &nbsp;|&nbsp; **Stack:** SvelteKit 2 · Svelte 5 · TypeScript · SQLite · Drizzle ORM · Tailwind CSS v4 · Vitest
+**License:** MIT &nbsp;|&nbsp; **Stack:** SvelteKit 2 · Svelte 5 · TypeScript · SQLite · Drizzle ORM · Tailwind CSS v4 · Tiptap 3 · Vitest
 
 ---
 
@@ -13,7 +13,7 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [Default Credentials](#default-credentials)
-- [Block Editor](#block-editor)
+- [Editor](#editor)
 - [Admin Panel](#admin-panel)
 - [Public Frontend](#public-frontend)
 - [Plugin System](#plugin-system)
@@ -29,7 +29,7 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 
 ### Content Management
 - **Posts & Pages** — Create, edit, publish, draft, schedule, trash, and restore content; trash/restore preserves the original status
-- **Block editor** — Gutenberg-style editor with 21 block types (see [Block Editor](#block-editor))
+- **Tiptap editor** — ProseMirror-based rich text editor with 21 block types, floating node views, and keyboard shortcuts (see [Editor](#editor))
 - **Post revisions** — Every save creates a revision; browse and restore from a diff view
 - **Scheduled publishing** — Set a future publish date; `node-cron` publishes automatically every minute; "Scheduled" tab in admin
 - **Sticky posts** — Pin posts to the top of archive listings
@@ -111,7 +111,7 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 - **oEmbed** — `/api/oembed` proxy resolves YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok embed HTML
 - **Drizzle ORM** — Type-safe SQLite queries; schema migrations via `drizzle-kit`
 - **Svelte 5 runes** — All state via `$state`, `$derived`, `$effect`; no legacy stores
-- **Unit tests** — Vitest + @testing-library/svelte; 260 tests covering utils, permissions, route matchers, plugin hooks, API auth, post loading, session lifecycle, and 2FA flows
+- **Unit tests** — Vitest + @testing-library/svelte; 346 tests covering utils, permissions, route matchers, plugin hooks, API auth, post loading, session lifecycle, 2FA flows, and all editor extensions
 
 ---
 
@@ -171,45 +171,54 @@ node build/index.js
 
 ---
 
-## Block Editor
+## Editor
 
-The editor supports 21 block types across four categories:
+SveltePress uses a [Tiptap 3](https://tiptap.dev) (ProseMirror-based) rich text editor. Content is stored as Tiptap JSON (`{ type: 'doc', content: [...] }`) and rendered server-side via `generateHTML` from `@tiptap/html`. Legacy posts (old block format) continue to render correctly via backward-compatible rendering.
+
+**Toolbar** — block type picker, bold/italic/underline/strikethrough, alignment, link, inline code, undo/redo.
+
+**Block inserter** — 21 block types across five categories:
 
 **Text**
 | Block | Description |
 |---|---|
-| Paragraph | Rich text with bold/italic via Ctrl+B / Ctrl+I |
-| Heading | H1–H6 with level switcher toolbar |
-| List | Ordered and unordered lists |
-| Quote | Blockquote with optional citation |
-| Pullquote | Large centered pull quote with border |
-| Code | Monospace code block with language label |
+| Paragraph | Rich text with inline formatting |
+| Heading | H2–H4 with level switcher |
+| Quote | Blockquote |
+| Pullquote | Large centered pull quote |
 | Preformatted | Preserves whitespace, monospace |
-| HTML | Raw HTML passthrough |
-| Shortcode | Shortcode placeholder (rendered by plugins) |
+| Code Block | Fenced code block |
+
+**Lists**
+| Block | Description |
+|---|---|
+| Bullet List | Unordered list |
+| Numbered List | Ordered list |
 
 **Media**
 | Block | Description |
 |---|---|
-| Image | Upload or select from media library; alt text, caption, size, alignment |
-| Gallery | Multi-image grid with column count control and full-screen lightbox viewer |
-| Video | URL embed or file reference |
+| Image | Upload or pick from media library |
+| Gallery | Multi-image grid — Svelte node view with image picker |
+| Video | URL input with caption — Svelte node view |
+| Embed | oEmbed URL (YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok) — Svelte node view |
 
 **Layout**
 | Block | Description |
 |---|---|
-| Columns | Two-column layout; each column supports its own set of nested blocks (excluding another Columns block) |
-| Separator | Horizontal rule with style variants |
-| Spacer | Adjustable height whitespace |
-| Table | Rows/columns editor with header toggle |
+| Two Columns | Two-column nested editor panes |
+| Separator | Horizontal rule |
+| Spacer | Adjustable height — Svelte node view with drag slider |
 
-**Widgets**
+**Advanced**
 | Block | Description |
 |---|---|
-| Button | CTA button with fill/outline style, URL, and new-tab toggle |
-| Embed | oEmbed URL embed — fetches HTML from YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok |
+| Button | CTA with fill/outline style, URL, target — Svelte node view |
+| Custom HTML | Raw HTML textarea — Svelte node view |
+| Shortcode | Shortcode text input — Svelte node view |
+| Table | Rows/columns with header row |
 
-**Block controls** (all blocks): move up/down, duplicate, delete, add block below.
+**Node views** — Spacer, Video, Embed, Gallery, Button, HTML, and Shortcode blocks render as interactive Svelte 5 components inside the editor, mounted via a custom `SvelteNodeViewRenderer`.
 
 ---
 
@@ -221,8 +230,8 @@ All admin routes live under `/sp-admin/`:
 |---|---|
 | `/sp-admin/dashboard` | At-a-glance stats, quick draft, recent activity, welcome panel |
 | `/sp-admin/posts` | Post list with status tabs (including Scheduled), search, bulk actions, hover actions |
-| `/sp-admin/posts/new` | Block editor for new post |
-| `/sp-admin/posts/[id]` | Block editor for existing post |
+| `/sp-admin/posts/new` | Tiptap editor for new post |
+| `/sp-admin/posts/[id]` | Tiptap editor for existing post |
 | `/sp-admin/pages` | Same as posts, filtered to pages |
 | `/sp-admin/media` | Grid/list media library, drag-and-drop upload, bulk delete |
 | `/sp-admin/media/[id]` | Attachment detail and edit |
@@ -389,9 +398,21 @@ svelte-press/
 ├── src/
 │   ├── lib/
 │   │   ├── components/
-│   │   │   ├── blocks/          # 21 block editor components
+│   │   │   ├── editor/          # Tiptap editor components
+│   │   │   │   ├── TiptapEditor.svelte
+│   │   │   │   ├── TiptapToolbar.svelte
+│   │   │   │   ├── BlockInserterMenu.svelte
+│   │   │   │   ├── MediaPickerDialog.svelte
+│   │   │   │   └── node-views/  # Svelte node view components
+│   │   │   ├── blocks/          # Legacy block components (kept for reference)
 │   │   │   ├── GalleryLightbox.svelte  # Full-screen gallery lightbox
 │   │   │   └── Comment.svelte   # Recursive threaded comment component
+│   │   ├── editor/              # Tiptap editor core
+│   │   │   ├── use-editor.svelte.ts         # Svelte 5 $state hook
+│   │   │   ├── SvelteNodeViewRenderer.svelte.ts  # ProseMirror node view renderer
+│   │   │   ├── backward-compat.ts           # Tiptap JSON vs legacy Block[] detection
+│   │   │   ├── html-export.ts               # generateHTML() wrapper (SSR-safe)
+│   │   │   └── extensions/      # Custom Tiptap extensions + node views
 │   │   ├── auth.ts              # Better Auth config (drizzle adapter, twoFactor plugin, bcrypt)
 │   │   ├── auth-client.ts       # SvelteKit client helper (twoFactorClient plugin)
 │   │   ├── server/

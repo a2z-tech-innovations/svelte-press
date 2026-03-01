@@ -21,6 +21,7 @@ Git repo on `master`
 | Auth | Better Auth v1.5 (`better-auth`) — drizzle adapter, twoFactor plugin |
 | Images | `sharp` for thumbnail generation |
 | Email | `nodemailer` (ethereal.email in dev, real SMTP via env vars in prod) |
+| Editor | Tiptap 3 (`@tiptap/core`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/html`) |
 | Testing | Vitest + @testing-library/svelte + happy-dom |
 | Package manager | **pnpm** (never npm or bun) |
 | Deployment | `@sveltejs/adapter-node` |
@@ -345,12 +346,40 @@ Applied in: `posts/+page.server.ts` (bulk + single), `pages/+page.server.ts` (bu
 
 ---
 
+## Tiptap Editor
+
+Content stored as Tiptap JSON (`{ type: 'doc', content: [...] }`). Legacy posts (old `Block[]` format) render via `renderBlocks()`.
+
+**Key files:**
+- `src/lib/editor/use-editor.svelte.ts` — `useEditor()` wraps `new Editor(...)` in `$state`; returns `{ get editor() }` getter (must access as `editorHook.editor`, NOT destructured — destructuring loses reactivity)
+- `src/lib/editor/SvelteNodeViewRenderer.svelte.ts` — mounts Svelte 5 components as ProseMirror node views; must be `.svelte.ts` (uses `$state` rune)
+- `src/lib/editor/extensions/index.ts` — `getExtensions()` returns all extensions; safe for SSR and tests (no Svelte imports)
+- `src/lib/editor/extensions/with-node-views.svelte.ts` — `*WithView` exports attach Svelte node view components; browser-only; imported only from `TiptapEditor.svelte`
+- `src/lib/editor/backward-compat.ts` — `isTiptapDoc()` / `isLegacyBlocks()` / `parseContent()`
+- `src/lib/editor/html-export.ts` — `tiptapToHtml(doc)` uses `generateHTML` from `@tiptap/html` (works in Node.js SSR; `@tiptap/core`'s `generateHTML` requires DOM — do NOT use it server-side)
+- `src/lib/components/editor/TiptapEditor.svelte` — main editor component
+- `src/lib/components/editor/BlockInserterMenu.svelte` — block inserter; uses `insertContentAt(editor.state.selection.to, ...)` via `ins()` helper for all atom/block inserts to avoid replacing a selected atom node
+
+**Tiptap version: 3.x** (StarterKit 3 already includes Link, Underline, UndoRedo — do NOT add them separately)
+
+**Publish button / form status pattern** — Svelte 5 batches `$state` microtasks; use `use:enhance` `formData` injection with `data-submit-status` attributes on buttons, not a hidden `<input>` bound to `$state`.
+
+**Frontend rendering** (`[slug]/+page.svelte`):
+```ts
+import { isTiptapDoc, isLegacyBlocks } from '$lib/editor/backward-compat.js';
+import { tiptapToHtml } from '$lib/editor/html-export.js';
+// isTiptapDoc → tiptapToHtml(content)
+// isLegacyBlocks → renderBlocks(content)
+```
+
+---
+
 ## oEmbed
 
 Server endpoint: `GET /api/oembed?url=<encoded-url>`
 Supports: YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok.
 Returns oEmbed JSON or `{ error }` with appropriate HTTP status.
-EmbedBlock stores `embedHtml` in `block.attrs.embedHtml` after fetch. Frontend renders stored HTML.
+EmbedBlock stores `embedHtml` in node attrs after fetch. Frontend renders stored HTML.
 
 ---
 
@@ -545,7 +574,7 @@ pnpm dev           # dev server on :5173
 pnpm build         # production build → build/
 pnpm preview       # preview production build
 pnpm check         # TypeScript + Svelte type check
-pnpm test          # run unit tests (Vitest) — 260 tests
+pnpm test          # run unit tests (Vitest) — 346 tests
 pnpm test:watch    # run tests in watch mode
 pnpm test:coverage # run tests with v8 coverage report
 pnpm db:generate   # generate Drizzle migration from schema
@@ -567,9 +596,9 @@ All features are complete and working end-to-end:
 - **Two-factor authentication** — TOTP setup via QR code, backup codes, enable/disable from profile; 2FA step on login via BA `twoFactor` plugin
 - **Admin layout** — dark sidebar, adminbar, all nav, logout
 - **Dashboard** — stats, quick draft, recent activity, welcome panel
-- **Posts & Pages CRUD** — list, new, edit (with block editor), trash/restore (preserves pre-trash status), visibility selector
+- **Posts & Pages CRUD** — list, new, edit (with Tiptap editor), trash/restore (preserves pre-trash status), visibility selector
 - **Scheduled posts** — `status='future'`; "Scheduled" tab in admin list; node-cron auto-publishes every minute
-- **Block editor** — 21 block types, toolbar, inserter; contenteditable duplication bug fixed; HTML comment stripping
+- **Tiptap editor** — ProseMirror-based, 21 block types, toolbar, block inserter, Svelte 5 node views; content stored as Tiptap JSON; backward-compatible rendering for legacy Block[] posts
 - **Columns block** — two-column layout with full nested block support per column (no recursive columns)
 - **Embed block** — oEmbed fetch via `/api/oembed` for YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok
 - **Gallery block** — multi-image grid with full-screen lightbox via event delegation
@@ -628,3 +657,7 @@ None.
 18. **Nested forms**: Never place a `<form>` inside the main editor save form. For secondary actions (trash, restore), add standalone `<form id="sp-trash-form">` / `<form id="sp-restore-form">` after the closing `</form>` and reference them via `form="sp-trash-form"` on the button.
 19. **Better Auth calls inside try/catch**: `redirect()` from `@sveltejs/kit` throws; always re-throw with `if (isRedirect(e)) throw e` to prevent the catch block from swallowing SvelteKit redirects.
 20. **BETTER_AUTH_SECRET**: Must be consistent between `.env` and `getSecret()` fallback in `profile/+page.server.ts`. Both BA (for cookie signing) and our TOTP encryption use this value — a mismatch causes silent 2FA verification failures.
+21. **Tiptap `useEditor` reactivity**: Always access the editor as `editorHook.editor` — never `const { editor } = useEditor(...)`. Destructuring extracts `null` at call time and loses the reactive getter.
+22. **Tiptap `generateHTML` in SSR**: Import from `@tiptap/html`, not `@tiptap/core`. The core version uses `window.document` and crashes in Node.js.
+23. **Tiptap node view extensions**: Base extensions (`src/lib/editor/extensions/*.ts`) must NOT import `.svelte` files — they're used in SSR and tests. Node view wiring lives exclusively in `with-node-views.svelte.ts`.
+24. **Tiptap atom block insertion**: Always use `ins()` helper (calls `insertContentAt(editor.state.selection.to, ...)`) for atom/block inserts in `BlockInserterMenu`. Using plain `insertContent` replaces the currently selected atom node.
