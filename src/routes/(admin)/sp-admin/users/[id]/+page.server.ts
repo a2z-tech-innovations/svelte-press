@@ -1,7 +1,7 @@
 import { fail, error } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { users, userMeta } from '$lib/server/db/schema.js';
+import { users, userMeta, account } from '$lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { can } from '$lib/server/permissions/index.js';
@@ -65,6 +65,7 @@ export const actions: Actions = {
 			role
 		};
 
+		let newPasswordHash: string | undefined;
 		if (password) {
 			if (password !== confirmPassword) {
 				return fail(400, { error: 'Passwords do not match.' });
@@ -72,10 +73,33 @@ export const actions: Actions = {
 			if (password.length < 6) {
 				return fail(400, { error: 'Password must be at least 6 characters.' });
 			}
-			updateData.passwordHash = await bcrypt.hash(password, 10);
+			newPasswordHash = await bcrypt.hash(password, 10);
+			updateData.passwordHash = newPasswordHash;
 		}
 
 		await db.update(users).set(updateData as typeof users.$inferInsert).where(eq(users.id, id));
+
+		// Keep Better Auth account record in sync when password changes
+		if (newPasswordHash) {
+			const accountRow = db.select({ id: account.id }).from(account)
+				.where(and(eq(account.userId, id), eq(account.providerId, 'credential')))
+				.get();
+			if (accountRow) {
+				await db.update(account).set({ password: newPasswordHash, updatedAt: new Date() })
+					.where(eq(account.id, accountRow.id));
+			} else {
+				// Account record missing — create it so the user can log in
+				await db.insert(account).values({
+					id: crypto.randomUUID(),
+					userId: id,
+					accountId: String(id),
+					providerId: 'credential',
+					password: newPasswordHash,
+					createdAt: new Date(),
+					updatedAt: new Date()
+				});
+			}
+		}
 
 		return { success: true };
 	},

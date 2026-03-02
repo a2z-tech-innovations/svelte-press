@@ -24,7 +24,7 @@ export const GET: RequestHandler = async (event) => {
 		return { ...r, submissionCount };
 	});
 
-	return json(result);
+	return json({ forms: result });
 };
 
 export const POST: RequestHandler = async (event) => {

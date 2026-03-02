@@ -25,7 +25,7 @@ export const GET: RequestHandler = async () => {
 		.orderBy(asc(terms.name))
 		.all();
 
-	return json(rows);
+	return json({ categories: rows });
 };
 
 // ─── POST /api/v1/categories ──────────────────────────────────────────────────

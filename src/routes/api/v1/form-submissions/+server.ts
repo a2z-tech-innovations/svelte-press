@@ -92,7 +92,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const [{ count: total }] = db.select({ count: count() }).from(formSubmissions).where(whereClause).all();
 
-	return json({ data: rows, total, page, totalPages: Math.ceil(total / perPage) });
+	return json({ submissions: rows, total, page, perPage, totalPages: Math.ceil(total / perPage) });
 };
 
 export const POST: RequestHandler = async (event) => {

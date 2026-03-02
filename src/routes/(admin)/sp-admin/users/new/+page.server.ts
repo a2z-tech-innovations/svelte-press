@@ -1,10 +1,9 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { users } from '$lib/server/db/schema.js';
+import { users, account } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import { slugify } from '$lib/utils.js';
 
 export const load: PageServerLoad = async () => {
 	return {};
@@ -46,6 +45,19 @@ export const actions: Actions = {
 			registeredAt: new Date()
 		}).returning({ id: users.id });
 
-		redirect(302, `/sp-admin/users/${result[0].id}`);
+		const newUserId = result[0].id;
+
+		// Create Better Auth account record so the user can sign in with their password
+		await db.insert(account).values({
+			id: crypto.randomUUID(),
+			userId: newUserId,
+			accountId: String(newUserId),
+			providerId: 'credential',
+			password: passwordHash,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+
+		redirect(302, `/sp-admin/users/${newUserId}`);
 	}
 };

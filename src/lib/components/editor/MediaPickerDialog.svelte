@@ -18,7 +18,7 @@
 		try {
 			const res = await fetch('/api/v1/media?type=image&perPage=48');
 			const data = await res.json();
-			mediaItems = (data.items ?? []).map((m: Record<string, unknown>) => ({
+			mediaItems = (data.media ?? []).map((m: Record<string, unknown>) => ({
 				id: m.id,
 				url: m.url as string,
 				alt: m.alt as string,

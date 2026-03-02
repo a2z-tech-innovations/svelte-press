@@ -52,7 +52,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			categoryPostIds = relations.map((r) => r.postId);
 			// If no posts match this category, return empty early
 			if (categoryPostIds.length === 0) {
-				return json([], {
+				return json({ posts: [], total: 0, page, perPage, totalPages: 0 }, {
 					headers: {
 						'X-Total': '0',
 						'X-Total-Pages': '0',
@@ -62,7 +62,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			}
 		} else {
 			// Unknown category slug → no results
-			return json([], {
+			return json({ posts: [], total: 0, page, perPage, totalPages: 0 }, {
 				headers: {
 					'X-Total': '0',
 					'X-Total-Pages': '0',
@@ -148,7 +148,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	const totalPages = Math.ceil(total / perPage);
 
-	return json(result, {
+	return json({ posts: result, total, page, perPage, totalPages }, {
 		headers: {
 			'X-Total': String(total),
 			'X-Total-Pages': String(totalPages),

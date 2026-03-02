@@ -101,7 +101,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	const totalPages = Math.ceil(total / perPage);
 
-	return json(result, {
+	return json({ pages: result, total, page, perPage, totalPages }, {
 		headers: {
 			'X-Total': String(total),
 			'X-Total-Pages': String(totalPages),

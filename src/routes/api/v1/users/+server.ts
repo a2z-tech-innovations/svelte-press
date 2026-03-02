@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { users } from '$lib/server/db/schema.js';
+import { users, account } from '$lib/server/db/schema.js';
 import { eq, and, count, asc } from 'drizzle-orm';
 import { requireCapability } from '$lib/server/api/auth.js';
 import bcrypt from 'bcryptjs';
@@ -59,7 +59,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const totalPages = Math.ceil(total / perPage);
 
-	return json(rows, {
+	return json({ users: rows, total, page, perPage, totalPages }, {
 		headers: {
 			'X-Total': String(total),
 			'X-Total-Pages': String(totalPages),
@@ -139,6 +139,17 @@ export const POST: RequestHandler = async (event) => {
 			role: users.role,
 			registeredAt: users.registeredAt
 		});
+
+	// Create Better Auth account record so the user can sign in with their password
+	await db.insert(account).values({
+		id: crypto.randomUUID(),
+		userId: inserted.id,
+		accountId: String(inserted.id),
+		providerId: 'credential',
+		password: passwordHash,
+		createdAt: new Date(),
+		updatedAt: new Date()
+	});
 
 	return json(inserted, { status: 201 });
 };
