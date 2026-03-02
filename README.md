@@ -29,7 +29,8 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 
 ### Content Management
 - **Posts & Pages** — Create, edit, publish, draft, schedule, trash, and restore content; trash/restore preserves the original status
-- **Tiptap editor** — ProseMirror-based rich text editor with 21 block types, floating node views, and keyboard shortcuts (see [Editor](#editor))
+- **Tiptap editor** — ProseMirror-based rich text editor with 22 block types, floating node views, and keyboard shortcuts (see [Editor](#editor))
+- **Form Builder** — Visual form builder block inside the editor; create contact/inquiry forms with 12 field types, drag-and-drop field reordering, spam honeypot; submissions stored in DB, managed in admin, exportable as CSV
 - **Post revisions** — Every save creates a revision; browse and restore from a diff view
 - **Scheduled publishing** — Set a future publish date; `node-cron` publishes automatically every minute; "Scheduled" tab in admin
 - **Sticky posts** — Pin posts to the top of archive listings
@@ -107,11 +108,11 @@ A full-featured, open-source WordPress clone built from scratch with SvelteKit 2
 ### Developer Features
 - **Plugin system** — WordPress-style `addAction` / `doAction` / `addFilter` / `applyFilters` hook API; active plugins loaded from `plugins/*/plugin.ts` at server startup; activation state persisted in DB
 - **Theme system** — Themes in `themes/*/`; active theme stored in `options` table; per-theme `style.css` dynamically loaded on frontend; switch via admin UI
-- **REST API** — Full CRUD at `/api/v1/*` for posts, pages, media, comments, users, categories, tags; all write endpoints require authentication
+- **REST API** — Full CRUD at `/api/v1/*` for posts, pages, media, comments, users, categories, tags, forms, and form submissions; all write endpoints require authentication
 - **oEmbed** — `/api/oembed` proxy resolves YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok embed HTML
 - **Drizzle ORM** — Type-safe SQLite queries; schema migrations via `drizzle-kit`
 - **Svelte 5 runes** — All state via `$state`, `$derived`, `$effect`; no legacy stores
-- **Unit tests** — Vitest + @testing-library/svelte; 346 tests covering utils, permissions, route matchers, plugin hooks, API auth, post loading, session lifecycle, 2FA flows, and all editor extensions
+- **Unit tests** — Vitest + @testing-library/svelte; 398 tests covering utils, permissions, route matchers, plugin hooks, API auth, post loading, session lifecycle, 2FA flows, editor extensions, form schema generation, Zod validation, CSV export, and submission flow
 
 ---
 
@@ -177,7 +178,7 @@ SveltePress uses a [Tiptap 3](https://tiptap.dev) (ProseMirror-based) rich text 
 
 **Toolbar** — block type picker, bold/italic/underline/strikethrough, alignment, link, inline code, undo/redo.
 
-**Block inserter** — 21 block types across five categories:
+**Block inserter** — 22 block types across six categories:
 
 **Text**
 | Block | Description |
@@ -218,7 +219,12 @@ SveltePress uses a [Tiptap 3](https://tiptap.dev) (ProseMirror-based) rich text 
 | Shortcode | Shortcode text input — Svelte node view |
 | Table | Rows/columns with header row |
 
-**Node views** — Spacer, Video, Embed, Gallery, Button, HTML, and Shortcode blocks render as interactive Svelte 5 components inside the editor, mounted via a custom `SvelteNodeViewRenderer`.
+**Interactive**
+| Block | Description |
+|---|---|
+| Form | Visual form builder — add/reorder/configure fields, settings (submit label, success message, email notification), live preview tab; Svelte node view |
+
+**Node views** — Spacer, Video, Embed, Gallery, Button, HTML, Shortcode, and Form blocks render as interactive Svelte 5 components inside the editor, mounted via a custom `SvelteNodeViewRenderer`.
 
 ---
 
@@ -252,6 +258,8 @@ All admin routes live under `/sp-admin/`:
 | `/sp-admin/settings/discussion` | Comment and notification settings |
 | `/sp-admin/settings/media` | Image size settings |
 | `/sp-admin/settings/permalinks` | URL structure settings |
+| `/sp-admin/form-submissions` | Form submission inbox — status tabs (All/Unread/Read/Spam/Trash), form filter, bulk actions, CSV export |
+| `/sp-admin/form-submissions/[id]` | Full submission detail with field labels, status change, restore, delete |
 | `/sp-admin/activity` | Admin activity log with filters and pagination |
 | `/sp-admin/tools` | WXR import and export |
 | `/sp-admin/revisions/[id]` | Revision browser and restore |
@@ -348,6 +356,9 @@ All endpoints at `/api/v1/` support standard CRUD. Authentication uses the same 
 | `/api/v1/users` | GET, POST | GET+POST: `manage_users` |
 | `/api/v1/categories` | GET, POST | POST: `manage_categories` |
 | `/api/v1/tags` | GET, POST | POST: `manage_categories` |
+| `/api/v1/forms` | GET, POST | POST: `edit_posts` |
+| `/api/v1/forms/[id]` | GET, PUT, DELETE | PUT/DELETE: `edit_posts` |
+| `/api/v1/form-submissions` | GET, POST | GET: `manage_options`; POST: public |
 | `/api/upload` | POST | `upload_files` |
 | `/api/oembed` | GET | Public |
 
@@ -371,6 +382,7 @@ SMTP_FROM=SveltePress <noreply@example.com>
 Emails sent:
 - **Password reset** — triggered by forgot password form
 - **New comment notification** — sent to post author when a comment is submitted
+- **Form submission notification** — optionally sent to a configured address when a form is submitted (enabled per-form via the Settings tab in the Form Builder)
 
 ---
 

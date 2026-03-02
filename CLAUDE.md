@@ -22,6 +22,7 @@ Git repo on `master`
 | Images | `sharp` for thumbnail generation |
 | Email | `nodemailer` (ethereal.email in dev, real SMTP via env vars in prod) |
 | Editor | Tiptap 3 (`@tiptap/core`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/html`) |
+| Forms | `sveltekit-superforms` 2.x + Zod 4 — use `zod4` adapter from `'sveltekit-superforms/adapters'` |
 | Testing | Vitest + @testing-library/svelte + happy-dom |
 | Package manager | **pnpm** (never npm or bun) |
 | Deployment | `@sveltejs/adapter-node` |
@@ -156,7 +157,7 @@ const rows = db.all<{ year: string; month: string; count: number }>(sql`
 ```
 
 **Schema location**: `src/lib/server/db/schema.ts`
-**Exported tables**: `users`, `sessions`, `posts`, `terms`, `postTerms`, `comments`, `media`, `options`, `menus`, `menuItems`, `postMeta`, `userMeta`, `revisions`, `widgets`, `account`, `verification`, `twoFactor`
+**Exported tables**: `users`, `sessions`, `posts`, `terms`, `postTerms`, `comments`, `media`, `options`, `menus`, `menuItems`, `postMeta`, `userMeta`, `revisions`, `widgets`, `account`, `verification`, `twoFactor`, `forms`, `formSubmissions`
 
 There is NO separate `pages` table — pages are `posts` rows with `postType = 'page'`.
 
@@ -368,9 +369,11 @@ Content stored as Tiptap JSON (`{ type: 'doc', content: [...] }`). Legacy posts 
 ```ts
 import { isTiptapDoc, isLegacyBlocks } from '$lib/editor/backward-compat.js';
 import { tiptapToHtml } from '$lib/editor/html-export.js';
-// isTiptapDoc → tiptapToHtml(content)
+// isTiptapDoc → split-content rendering (see Form Builder section)
 // isLegacyBlocks → renderBlocks(content)
 ```
+
+When a post contains Form blocks, the page uses **split-content rendering** — iterates Tiptap doc nodes, renders non-form nodes as HTML chunks via `tiptapToHtml`, and interleaves `<FormRenderer>` components for form nodes. The `load()` function pre-loads form configs and creates superform validators. See `src/routes/(frontend)/[slug]/+page.server.ts` and `+page.svelte`.
 
 ---
 
@@ -422,6 +425,7 @@ src/routes/
 │       ├── pages/              # list, new/, [id]/
 │       ├── media/              # list, [id]/
 │       ├── comments/
+│       ├── form-submissions/   # list with status tabs + filter; [id]/ detail view
 │       ├── categories/
 │       ├── tags/
 │       ├── menus/
@@ -454,6 +458,8 @@ src/routes/
 │   └── search/
 ├── api/
 │   ├── v1/posts/, pages/, media/, comments/, users/, categories/, tags/
+│   ├── v1/forms/, v1/forms/[id]/   # form CRUD (auth-guarded writes)
+│   ├── v1/form-submissions/        # GET (paginated, CSV export); POST (public submit)
 │   ├── upload/                 # multipart file upload
 │   └── oembed/                 # oEmbed proxy endpoint
 └── themes/[theme]/style.css/   # serves theme CSS from filesystem
@@ -574,7 +580,7 @@ pnpm dev           # dev server on :5173
 pnpm build         # production build → build/
 pnpm preview       # preview production build
 pnpm check         # TypeScript + Svelte type check
-pnpm test          # run unit tests (Vitest) — 346 tests
+pnpm test          # run unit tests (Vitest) — 398 tests
 pnpm test:watch    # run tests in watch mode
 pnpm test:coverage # run tests with v8 coverage report
 pnpm db:generate   # generate Drizzle migration from schema
@@ -598,7 +604,7 @@ All features are complete and working end-to-end:
 - **Dashboard** — stats, quick draft, recent activity, welcome panel
 - **Posts & Pages CRUD** — list, new, edit (with Tiptap editor), trash/restore (preserves pre-trash status), visibility selector
 - **Scheduled posts** — `status='future'`; "Scheduled" tab in admin list; node-cron auto-publishes every minute
-- **Tiptap editor** — ProseMirror-based, 21 block types, toolbar, block inserter, Svelte 5 node views; content stored as Tiptap JSON; backward-compatible rendering for legacy Block[] posts
+- **Tiptap editor** — ProseMirror-based, 22 block types, toolbar, block inserter, Svelte 5 node views; content stored as Tiptap JSON; backward-compatible rendering for legacy Block[] posts
 - **Columns block** — two-column layout with full nested block support per column (no recursive columns)
 - **Embed block** — oEmbed fetch via `/api/oembed` for YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok
 - **Gallery block** — multi-image grid with full-screen lightbox via event delegation
@@ -619,7 +625,8 @@ All features are complete and working end-to-end:
 - **Revisions** — slider, side-by-side diff, restore
 - **Tools** — WXR export and import
 - **Public frontend** — blog home, single post/page, category, tag, author, search, date archives (`/[year]/[month]/`), permalink-aware URLs
-- **REST API** — `/api/v1/` for posts, pages, media, comments, users, categories, tags, upload; **all write endpoints auth-guarded**
+- **REST API** — `/api/v1/` for posts, pages, media, comments, users, categories, tags, forms, form-submissions, upload; **all write endpoints auth-guarded**
+- **Form Builder** — `FormBlock` Tiptap extension (atom node), 3-tab node view (Fields/Settings/Preview), 12 field types with drag-and-drop reorder; `syncFormToDb()` called on every post/page save; `FormRenderer.svelte` for frontend; admin submissions inbox at `/sp-admin/form-submissions`; CSV export; spam honeypot; optional email notification per form
 
 ---
 
@@ -632,6 +639,54 @@ None.
 - **Akismet / spam filtering** — plugin stub exists but makes no real API calls
 - **Import validation** — WXR import does not check for duplicate slugs or missing authors
 - **Multisite** — single-site only
+
+---
+
+## Form Builder
+
+### DB Tables (`src/lib/server/db/schema.ts`)
+- `forms` — `id`, `nodeId` (unique nanoid), `postId` FK, `title`, `fields` (JSON), `settings` (JSON), `createdAt`, `updatedAt`
+- `formSubmissions` — `id`, `formId` FK (cascade delete), `data` (JSON), `ipAddress`, `userAgent`, `status` enum (`unread|read|spam|trash`), `createdAt`
+
+### Types (`src/lib/types/index.ts`)
+`FormFieldType` (12 types: `text|email|textarea|select|checkbox|radio|number|phone|url|date|file|hidden`), `FormField`, `FormSettings`, `FormConfig`
+
+### Server Utilities (`src/lib/server/forms/index.ts`)
+- `generateZodSchema(fields)` — builds Zod object schema dynamically; always includes `_honeypot` field (max 0 chars)
+- `syncFormToDb(postId, nodeId, title, fields, settings)` — upsert form config (called on every post/page save)
+- `getFormByNodeId(nodeId)` / `getFormById(id)` — lookup helpers
+- `buildCsv(submissions, fields)` — generates CSV string with proper escaping
+
+### Zod / Superforms
+- Zod version: **4.x** — use Zod 4 API (`z.string()`, `z.coerce.number()`, etc.)
+- `sveltekit-superforms` adapter: **always import `zod4` from `'sveltekit-superforms/adapters'`** — NOT the plain `zod` adapter
+- Honeypot field: `_honeypot` with `.max(0)` — bots that fill it receive a silent `{ success: true }` response; no DB record stored
+
+### Tiptap Extension
+- `src/lib/editor/extensions/FormBlock.ts` — `group: 'block'`, `atom: true`; attrs: `nodeId`, `title`, `fields`, `settings`
+- `src/lib/components/editor/node-views/FormNodeView.svelte` — 3-tab UI: Fields (drag-and-drop field list + inline editor), Settings (submit label, success message, email notification), Preview (disabled read-only form)
+- Wired in `with-node-views.svelte.ts` as `FormWithView`, `TiptapEditor.svelte` nodeViewMap, and `BlockInserterMenu.svelte` blockDefs
+
+### Post Save Hook
+All 4 save actions (`posts/new`, `posts/[id]`, `pages/new`, `pages/[id]`) scan the saved Tiptap JSON for `type: 'form'` nodes and call `syncFormToDb()` for each.
+
+### Frontend Rendering
+- `src/lib/components/frontend/FormRenderer.svelte` — accepts `config: FormConfig`, `superformData`, `submitted: boolean`; uses `superForm(superformData, { validators: zod4(schema) })`; renders fields with error display; hidden `_formNodeId` and `_honeypot` inputs
+- `[slug]/+page.server.ts` — `load()` scans Tiptap doc for form nodes, pre-loads each form, creates superform validators; `submitForm` action validates, stores submission, fires optional email
+- `[slug]/+page.svelte` — split-content rendering: iterates doc nodes, interleaves `{@html htmlChunk}` and `<FormRenderer>` components
+
+### Admin Submissions UI
+- `/sp-admin/form-submissions` — status tabs (All/Unread/Read/Spam/Trash) with counts; form filter dropdown; bulk actions; per-row actions (Mark Read, Spam, Trash / Restore, Delete); CSV export
+- `/sp-admin/form-submissions/[id]` — full field-by-field display using form schema; status sidebar; Restore button when in trash
+- **All view excludes trash** — both counts (`if (s.status !== 'trash') counts.all++`) and the query (`WHERE status != 'trash'`)
+- **Nested form HTML pattern**: per-row action forms placed OUTSIDE the table with `id="sp-del-{id}"` etc. (`display:none`); bulk form is a separate standalone `<form id="sp-bulk-form">`; table buttons reference forms via `form="sp-xxx-{id}"` attribute — never nest `<form>` inside another `<form>`
+
+### REST API
+- `GET /api/v1/forms` — list all forms (auth: `manage_options`)
+- `POST /api/v1/forms` — create/upsert form (auth: `edit_posts`)
+- `GET/PUT/DELETE /api/v1/forms/[id]` — single form CRUD
+- `GET /api/v1/form-submissions` — paginated list; `?export=csv` streams CSV; filter by `?formId=` and `?status=`
+- `POST /api/v1/form-submissions` — public form submit endpoint
 
 ---
 
@@ -654,10 +709,12 @@ None.
 15. **Trash/restore pattern**: Always save pre-trash status to `post_meta._trash_status` before trashing. Restore reads and deletes this meta. Never hardcode `status: 'draft'` on restore.
 16. **Permalink URLs**: All listing pages (home, category, tag, author, search, date archive) must call `getPermalinkUrl(post, data.permalinkStructure)` — never hardcode `/${post.slug}`.
 17. **Activity logging**: All significant admin mutations must call `logActivity(...).catch(() => {})` — fire-and-forget, never throw.
-18. **Nested forms**: Never place a `<form>` inside the main editor save form. For secondary actions (trash, restore), add standalone `<form id="sp-trash-form">` / `<form id="sp-restore-form">` after the closing `</form>` and reference them via `form="sp-trash-form"` on the button.
+18. **Nested forms**: The HTML spec forbids nested `<form>` elements; browsers silently ignore inner forms and `use:enhance` breaks. For per-row actions in tables (trash, restore, delete), place hidden forms OUTSIDE the table with unique IDs (`id="sp-del-{id}"`) and reference them from buttons via the `form="sp-del-{id}"` attribute. The bulk form must also be a separate `<form>` element. See `/sp-admin/form-submissions/+page.svelte` as the canonical example.
 19. **Better Auth calls inside try/catch**: `redirect()` from `@sveltejs/kit` throws; always re-throw with `if (isRedirect(e)) throw e` to prevent the catch block from swallowing SvelteKit redirects.
 20. **BETTER_AUTH_SECRET**: Must be consistent between `.env` and `getSecret()` fallback in `profile/+page.server.ts`. Both BA (for cookie signing) and our TOTP encryption use this value — a mismatch causes silent 2FA verification failures.
 21. **Tiptap `useEditor` reactivity**: Always access the editor as `editorHook.editor` — never `const { editor } = useEditor(...)`. Destructuring extracts `null` at call time and loses the reactive getter.
 22. **Tiptap `generateHTML` in SSR**: Import from `@tiptap/html`, not `@tiptap/core`. The core version uses `window.document` and crashes in Node.js.
 23. **Tiptap node view extensions**: Base extensions (`src/lib/editor/extensions/*.ts`) must NOT import `.svelte` files — they're used in SSR and tests. Node view wiring lives exclusively in `with-node-views.svelte.ts`.
 24. **Tiptap atom block insertion**: Always use `ins()` helper (calls `insertContentAt(editor.state.selection.to, ...)`) for atom/block inserts in `BlockInserterMenu`. Using plain `insertContent` replaces the currently selected atom node.
+25. **Superforms Zod adapter**: Always import `zod4` from `'sveltekit-superforms/adapters'` — NOT `zod`. The project uses Zod 4.x; the plain `zod` adapter is for Zod 3 and will silently produce wrong validation behavior.
+26. **Form submission status re-sync**: After a `use:enhance` form action updates submission status in the DB, `load()` re-runs and returns new data. Always add `$effect(() => { localState = data.someField; })` to re-sync local `$state` from the refreshed page data — otherwise the UI shows stale values.
