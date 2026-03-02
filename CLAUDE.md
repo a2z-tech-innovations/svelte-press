@@ -8,6 +8,8 @@ Admin routes use `sp-*` prefix (never `wp-*`).
 
 Git repo on `master`
 
+**Commit style:** Never add `Co-Authored-By: Claude` or any AI attribution to commit messages.
+
 ---
 
 ## Stack
