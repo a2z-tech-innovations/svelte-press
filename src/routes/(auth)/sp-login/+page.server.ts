@@ -5,6 +5,7 @@ import { users } from '$lib/server/db/schema.js';
 import { auth } from '$lib/auth.js';
 import { or, eq } from 'drizzle-orm';
 import { logActivity } from '$lib/server/activity/index.js';
+import { checkRateLimit } from '$lib/server/ratelimit/index.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) redirect(302, '/sp-admin/dashboard');
@@ -13,6 +14,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	login: async (event) => {
+		const { limited, retryAfterSecs } = checkRateLimit(
+			`login:${event.getClientAddress()}`,
+			{ max: 10, windowMs: 15 * 60 * 1000 }
+		);
+		if (limited) return fail(429, { error: `Too many login attempts. Try again in ${retryAfterSecs} seconds.` });
+
 		const data = await event.request.formData();
 		// Accept username OR email (kept as "username" field in the form)
 		const identifier = String(data.get('username') ?? '').trim();
@@ -72,6 +79,12 @@ export const actions: Actions = {
 	},
 
 	verify2faLogin: async (event) => {
+		const { limited: twoFaLimited, retryAfterSecs: twoFaRetry } = checkRateLimit(
+			`2fa:${event.getClientAddress()}`,
+			{ max: 10, windowMs: 15 * 60 * 1000 }
+		);
+		if (twoFaLimited) return fail(429, { twoFactorError: `Too many attempts. Try again in ${twoFaRetry} seconds.` });
+
 		const pendingUserId = event.cookies.get('sp_2fa_pending');
 		if (!pendingUserId) redirect(302, '/sp-login');
 

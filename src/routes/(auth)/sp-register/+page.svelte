@@ -6,6 +6,7 @@
 		email?: string;
 		displayName?: string;
 		errors?: Record<string, string>;
+		error?: string;
 	}
 	let { data, form }: { data: { canRegister: boolean }; form?: FormData | null } = $props();
 	let loading = $state(false);
@@ -34,6 +35,10 @@
 					Back to Login
 				</a>
 			{:else}
+				{#if form?.error}
+					<div class="sp-auth-error">{form.error}</div>
+				{/if}
+
 				<form
 					method="POST"
 					use:enhance={() => {

@@ -4,6 +4,7 @@ import { db } from '$lib/server/db/index.js';
 import { users, options } from '$lib/server/db/schema.js';
 import { auth } from '$lib/auth.js';
 import { eq } from 'drizzle-orm';
+import { checkRateLimit } from '$lib/server/ratelimit/index.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) redirect(302, '/sp-admin/dashboard');
@@ -15,6 +16,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	default: async (event) => {
+		const { limited, retryAfterSecs } = checkRateLimit(
+			`register:${event.getClientAddress()}`,
+			{ max: 5, windowMs: 60 * 60 * 1000 }
+		);
+		if (limited) return fail(429, { error: `Too many registration attempts. Try again in ${retryAfterSecs} seconds.` });
+
 		const data = await event.request.formData();
 		const username = String(data.get('username') ?? '').trim();
 		const email = String(data.get('email') ?? '').trim();
