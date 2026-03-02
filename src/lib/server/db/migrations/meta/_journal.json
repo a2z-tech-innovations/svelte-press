@@ -22,6 +22,13 @@
       "when": 1772383602245,
       "tag": "0002_legal_tenebrous",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1772397720947,
+      "tag": "0003_glorious_saracen",
+      "breakpoints": true
     }
   ]
 }

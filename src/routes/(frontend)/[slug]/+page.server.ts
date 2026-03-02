@@ -2,10 +2,13 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types.js';
 import { createHash } from 'crypto';
 import { db } from '$lib/server/db/index.js';
-import { posts, users, comments, postTerms, terms, postMeta, options } from '$lib/server/db/schema.js';
+import { posts, users, comments, postTerms, terms, postMeta, options, forms, formSubmissions } from '$lib/server/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { sendEmail } from '$lib/server/email/index.js';
 import { getPermalinkUrl } from '$lib/utils.js';
+import { generateZodSchema } from '$lib/server/forms/index.js';
+import { logActivity } from '$lib/server/activity/index.js';
+import type { FormConfig, FormField, FormSettings } from '$lib/types/index.js';
 
 function gravatar(email: string, size = 48): string {
 	const hash = createHash('md5').update((email ?? '').trim().toLowerCase()).digest('hex');
@@ -146,7 +149,8 @@ export const load: PageServerLoad = async ({ params, cookies, url }) => {
 					comments: [],
 					commentTree: [],
 					categories: [],
-					tags: []
+					tags: [],
+					forms: {} as Record<string, FormConfig>
 				};
 			}
 		}
@@ -192,6 +196,33 @@ export const load: PageServerLoad = async ({ params, cookies, url }) => {
 
 	const commentTree = buildCommentTree(commentsWithGravatar);
 
+	// Load form configs for any form nodes in Tiptap content
+	const formConfigs: Record<string, FormConfig> = {};
+	const content = post.content;
+	if (content && typeof content === 'object' && !Array.isArray(content)) {
+		const doc = content as { type?: string; content?: unknown[] };
+		if (doc.type === 'doc' && Array.isArray(doc.content)) {
+			for (const node of doc.content) {
+				const n = node as { type?: string; attrs?: { nodeId?: string } };
+				if (n.type === 'form' && n.attrs?.nodeId) {
+					const row = db.select().from(forms).where(eq(forms.nodeId, n.attrs.nodeId)).get();
+					if (row) {
+						formConfigs[n.attrs.nodeId] = {
+							nodeId: row.nodeId,
+							title: row.title,
+							fields: (row.fields as unknown as FormField[]) ?? [],
+							settings: (row.settings as unknown as FormSettings) ?? {
+								submitLabel: 'Send',
+								successMessage: 'Thank you for your submission!',
+								emailNotification: false
+							}
+						};
+					}
+				}
+			}
+		}
+	}
+
 	return {
 		post: {
 			...post,
@@ -201,7 +232,8 @@ export const load: PageServerLoad = async ({ params, cookies, url }) => {
 		comments: commentsWithGravatar,
 		commentTree,
 		categories,
-		tags
+		tags,
+		forms: formConfigs
 	};
 };
 
@@ -362,5 +394,101 @@ export const actions: Actions = {
 			success: true,
 			message: 'Your comment has been submitted and is awaiting moderation.'
 		};
+	},
+
+	submitForm: async ({ request, locals, getClientAddress }) => {
+		const data = await request.formData();
+		const nodeId = String(data.get('_formNodeId') ?? '');
+
+		if (!nodeId) return fail(400, { formError: 'Invalid form.' });
+
+		// Load form row directly for id + config
+		const formRow = db.select().from(forms).where(eq(forms.nodeId, nodeId)).get();
+		if (!formRow) return fail(404, { formError: 'Form not found.' });
+
+		const formConfig: FormConfig = {
+			nodeId: formRow.nodeId,
+			title: formRow.title,
+			fields: (formRow.fields as unknown as FormField[]) ?? [],
+			settings: (formRow.settings as unknown as FormSettings) ?? {
+				submitLabel: 'Send',
+				successMessage: 'Thank you for your submission!',
+				emailNotification: false
+			}
+		};
+
+		// Honeypot check
+		const honeypot = String(data.get('_honeypot') ?? '');
+		if (honeypot.length > 0) {
+			return { formSubmitted: nodeId };
+		}
+
+		// Build submission data from FormData
+		const submissionData: Record<string, unknown> = {};
+		for (const field of formConfig.fields) {
+			if (field.type === 'hidden') {
+				submissionData[field.id] = field.defaultValue ?? '';
+			} else {
+				submissionData[field.id] = data.get(field.id) ?? '';
+			}
+		}
+
+		// Validate using Zod schema
+		const schema = generateZodSchema(formConfig.fields);
+		const parsed = schema.safeParse(submissionData);
+		if (!parsed.success) {
+			const errors: Record<string, string[]> = {};
+			for (const [path, issues] of Object.entries(parsed.error.flatten().fieldErrors)) {
+				errors[path] = issues as string[];
+			}
+			return fail(400, { formErrors: errors, formNodeId: nodeId });
+		}
+
+		// Store submission
+		const ipAddress = getClientAddress();
+		const userAgent = request.headers.get('user-agent') ?? '';
+
+		await db.insert(formSubmissions).values({
+			formId: formRow.id,
+			data: parsed.data as Record<string, unknown>,
+			ipAddress,
+			userAgent,
+			status: 'unread'
+		});
+
+		// Email notification
+		if (formConfig.settings.emailNotification) {
+			const adminOpt = db
+				.select({ optionValue: options.optionValue })
+				.from(options)
+				.where(eq(options.optionName, 'admin_email'))
+				.get();
+			const adminEmail = adminOpt?.optionValue ?? '';
+			const to = formConfig.settings.notificationEmail || adminEmail;
+			if (to) {
+				const bodyLines = formConfig.fields
+					.filter(f => f.type !== 'hidden')
+					.map(f => `<strong>${f.label}:</strong> ${String(parsed.data[f.id] ?? '')}`)
+					.join('<br>');
+				sendEmail({
+					to,
+					subject: `New form submission: ${formConfig.title}`,
+					html: `<h3>New submission for &quot;${formConfig.title}&quot;</h3>${bodyLines}`,
+					text: formConfig.fields
+						.filter(f => f.type !== 'hidden')
+						.map(f => `${f.label}: ${String(parsed.data[f.id] ?? '')}`)
+						.join('\n')
+				}).catch(() => {});
+			}
+		}
+
+		logActivity({
+			userId: locals.user?.id,
+			action: 'form_submitted',
+			objectType: 'form',
+			objectTitle: formConfig.title
+		}).catch(() => {});
+
+		return { formSubmitted: nodeId };
 	}
 };

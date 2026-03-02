@@ -16,6 +16,7 @@ import { Embed } from './Embed.js';
 import { Html } from './Html.js';
 import { Shortcode } from './Shortcode.js';
 import { Preformatted } from './Preformatted.js';
+import { FormBlock } from './FormBlock.js';
 
 export function getExtensions() {
 	return [
@@ -58,6 +59,7 @@ export function getExtensions() {
 		Embed,
 		Html,
 		Shortcode,
-		Preformatted
+		Preformatted,
+		FormBlock
 	];
 }

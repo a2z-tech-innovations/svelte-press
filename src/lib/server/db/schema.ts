@@ -336,6 +336,33 @@ export const widgets = sqliteTable('widgets', {
 	order: integer('order').notNull().default(0)
 });
 
+// ─── Forms ────────────────────────────────────────────────────────────────────
+
+export const forms = sqliteTable('forms', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	nodeId: text('node_id').notNull().unique(),
+	postId: integer('post_id').references(() => posts.id, { onDelete: 'set null' }),
+	title: text('title').notNull().default(''),
+	fields: text('fields', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().default([]),
+	settings: text('settings', { mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
+	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+	updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+}, (t) => [index('idx_forms_post_id').on(t.postId)]);
+
+export const formSubmissions = sqliteTable('form_submissions', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	formId: integer('form_id').notNull().references(() => forms.id, { onDelete: 'cascade' }),
+	data: text('data', { mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
+	ipAddress: text('ip_address'),
+	userAgent: text('user_agent'),
+	status: text('status', { enum: ['unread', 'read', 'spam', 'trash'] }).notNull().default('unread'),
+	createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+}, (t) => [
+	index('idx_form_submissions_form_id').on(t.formId),
+	index('idx_form_submissions_status').on(t.status),
+	index('idx_form_submissions_created_at').on(t.createdAt)
+]);
+
 // ─── Activity Log ─────────────────────────────────────────────────────────────
 
 export const activityLog = sqliteTable(

@@ -4,9 +4,11 @@
 	import { enhance } from '$app/forms';
 	import Comment from '$lib/components/Comment.svelte';
 	import GalleryLightbox from '$lib/components/GalleryLightbox.svelte';
+	import FormRenderer from '$lib/components/frontend/FormRenderer.svelte';
 	import { isTiptapDoc, isLegacyBlocks } from '$lib/editor/backward-compat.js';
 	import { getExtensions } from '$lib/editor/extensions/index.js';
 	import { tiptapToHtml } from '$lib/editor/html-export.js';
+	import type { JSONContent } from '@tiptap/core';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -92,15 +94,36 @@
 			.join('\n');
 	}
 
-	let renderedContent = $derived(() => {
+	type ContentSegment =
+		| { type: 'html'; html: string }
+		| { type: 'form'; nodeId: string };
+
+	let contentSegments = $derived((): ContentSegment[] => {
 		const c = data.post.content;
 		if (isTiptapDoc(c)) {
-			return tiptapToHtml(c, getExtensions());
+			const doc = c as JSONContent;
+			const segments: ContentSegment[] = [];
+			let htmlNodes: JSONContent[] = [];
+			for (const node of doc.content ?? []) {
+				if (node.type === 'form') {
+					if (htmlNodes.length > 0) {
+						segments.push({ type: 'html', html: tiptapToHtml({ type: 'doc', content: htmlNodes }, getExtensions()) });
+						htmlNodes = [];
+					}
+					segments.push({ type: 'form', nodeId: (node.attrs?.nodeId as string) ?? '' });
+				} else {
+					htmlNodes.push(node);
+				}
+			}
+			if (htmlNodes.length > 0) {
+				segments.push({ type: 'html', html: tiptapToHtml({ type: 'doc', content: htmlNodes }, getExtensions()) });
+			}
+			return segments;
 		}
 		if (isLegacyBlocks(c)) {
-			return renderBlocks(c as unknown[]);
+			return [{ type: 'html', html: renderBlocks(c as unknown[]) }];
 		}
-		return '';
+		return [];
 	});
 	let isPost = $derived(data.post.postType === 'post');
 
@@ -206,7 +229,17 @@
 	</header>
 
 	<div class="fp-single-content">
-		{@html renderedContent()}
+		{#each contentSegments() as seg}
+			{#if seg.type === 'html'}
+				{@html seg.html}
+			{:else if seg.type === 'form' && data.forms?.[seg.nodeId]}
+				<FormRenderer
+					config={data.forms[seg.nodeId]}
+					nodeId={seg.nodeId}
+					submitted={form?.formSubmitted === seg.nodeId}
+				/>
+			{/if}
+		{/each}
 	</div>
 
 	{#if isPost && data.tags.length > 0}

@@ -6,6 +6,8 @@ import { eq, sql, and, ne } from 'drizzle-orm';
 import { slugify } from '$lib/utils.js';
 import { nanoid } from 'nanoid';
 import { logActivity } from '$lib/server/activity/index.js';
+import { syncFormToDb } from '$lib/server/forms/index.js';
+import type { FormField, FormSettings } from '$lib/types/index.js';
 
 export const load: PageServerLoad = async () => {
 	const allPages = db
@@ -39,8 +41,9 @@ export const actions: Actions = {
 
 		if (!title) return fail(400, { error: 'Title is required.' });
 
-		let content: unknown[] = [];
-		try { content = JSON.parse(contentRaw); } catch { content = []; }
+		let parsedContent: unknown = null;
+		try { parsedContent = JSON.parse(contentRaw); } catch { parsedContent = []; }
+		const content = parsedContent as unknown[];
 
 		const now = new Date();
 		const postDate = status === 'publish' ? now : null;
@@ -80,6 +83,26 @@ export const actions: Actions = {
 			objectId: pageId,
 			objectTitle: title
 		}).catch(() => {});
+
+		// Sync form blocks to DB
+		if (parsedContent && typeof parsedContent === 'object' && !Array.isArray(parsedContent)) {
+			const doc = parsedContent as { type?: string; content?: unknown[] };
+			if (doc.type === 'doc' && Array.isArray(doc.content)) {
+				const formNodes = doc.content.filter((n: unknown) => (n as { type?: string }).type === 'form');
+				for (const node of formNodes) {
+					const n = node as { type: string; attrs?: { nodeId?: string; title?: string; fields?: unknown; settings?: unknown } };
+					if (n.attrs?.nodeId) {
+						await syncFormToDb(
+							pageId,
+							n.attrs.nodeId,
+							n.attrs.title ?? '',
+							(n.attrs.fields as FormField[]) ?? [],
+							(n.attrs.settings as FormSettings) ?? { submitLabel: 'Send', successMessage: 'Thank you!', emailNotification: false }
+						);
+					}
+				}
+			}
+		}
 
 		redirect(302, `/sp-admin/pages/${pageId}`);
 	}

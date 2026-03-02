@@ -192,6 +192,21 @@
 				</a>
 			</div>
 
+			<!-- Form Submissions -->
+			<div class="sp-nav-item">
+				<a
+					href="/sp-admin/form-submissions"
+					class="sp-nav-link"
+					class:active={isActive('/sp-admin/form-submissions')}
+				>
+					<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+						<rect x="1" y="2" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+						<path d="M4 6h8M4 9h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+					</svg>
+					Form Submissions
+				</a>
+			</div>
+
 			<div class="sp-nav-divider"></div>
 
 			<!-- Appearance -->

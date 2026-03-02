@@ -6,6 +6,7 @@ import { Embed } from './Embed.js';
 import { Html } from './Html.js';
 import { Shortcode } from './Shortcode.js';
 import { Button } from './Button.js';
+import { FormBlock } from './FormBlock.js';
 import SpacerNodeView from '../../components/editor/node-views/SpacerNodeView.svelte';
 import GalleryNodeView from '../../components/editor/node-views/GalleryNodeView.svelte';
 import VideoNodeView from '../../components/editor/node-views/VideoNodeView.svelte';
@@ -13,6 +14,7 @@ import EmbedNodeView from '../../components/editor/node-views/EmbedNodeView.svel
 import HtmlNodeView from '../../components/editor/node-views/HtmlNodeView.svelte';
 import ShortcodeNodeView from '../../components/editor/node-views/ShortcodeNodeView.svelte';
 import ButtonNodeView from '../../components/editor/node-views/ButtonNodeView.svelte';
+import FormNodeView from '../../components/editor/node-views/FormNodeView.svelte';
 
 /**
  * Returns extension overrides that add Svelte node views.
@@ -45,4 +47,8 @@ export const ShortcodeWithView = Shortcode.extend({
 
 export const ButtonWithView = Button.extend({
 	addNodeView() { return SvelteNodeViewRenderer(ButtonNodeView); }
+});
+
+export const FormWithView = FormBlock.extend({
+	addNodeView() { return SvelteNodeViewRenderer(FormNodeView); }
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Editor } from '@tiptap/core';
 	import type { GalleryImage } from '$lib/editor/extensions/Gallery.js';
+	import { nanoid } from 'nanoid';
 
 	let { editor }: { editor: Editor } = $props();
 
@@ -120,6 +121,18 @@
 		{
 			name: 'table', label: 'Table', category: 'Advanced', icon: '▤',
 			insert: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+		},
+		{
+			name: 'form', label: 'Form', category: 'Interactive', icon: '⊟',
+			insert: () => ins({
+				type: 'form',
+				attrs: {
+					nodeId: nanoid(10),
+					title: 'Contact Form',
+					fields: [],
+					settings: { submitLabel: 'Send', successMessage: 'Thank you for your submission!', emailNotification: false }
+				}
+			})
 		}
 	];
 

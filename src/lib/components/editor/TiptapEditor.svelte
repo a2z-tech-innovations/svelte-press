@@ -3,7 +3,7 @@
 	import { getExtensions } from '$lib/editor/extensions/index.js';
 	import {
 		SpacerWithView, GalleryWithView, VideoWithView, EmbedWithView,
-		HtmlWithView, ShortcodeWithView, ButtonWithView
+		HtmlWithView, ShortcodeWithView, ButtonWithView, FormWithView
 	} from '$lib/editor/extensions/with-node-views.svelte.js';
 	import { isTiptapDoc, isLegacyBlocks } from '$lib/editor/backward-compat.js';
 	import TiptapToolbar from './TiptapToolbar.svelte';
@@ -40,6 +40,7 @@
 			html: HtmlWithView,
 			shortcode: ShortcodeWithView,
 			button: ButtonWithView,
+			form: FormWithView,
 		};
 		return base.map((ext) => {
 			const override = nodeViewMap[(ext as { name?: string }).name ?? ''];

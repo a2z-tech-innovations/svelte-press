@@ -262,3 +262,42 @@ export interface CommentNode {
 	avatarUrl: string;
 	children: CommentNode[];
 }
+
+// ─── Forms ────────────────────────────────────────────────────────────────────
+
+export type FormFieldType =
+	| 'text' | 'email' | 'textarea' | 'select' | 'checkbox' | 'radio'
+	| 'number' | 'phone' | 'url' | 'date' | 'file' | 'hidden';
+
+export interface FormField {
+	id: string;
+	type: FormFieldType;
+	label: string;
+	placeholder?: string;
+	required: boolean;
+	options?: string[];
+	validation?: {
+		minLength?: number;
+		maxLength?: number;
+		min?: number;
+		max?: number;
+		pattern?: string;
+		accept?: string;
+		maxSize?: number;
+	};
+	defaultValue?: string;
+}
+
+export interface FormSettings {
+	submitLabel: string;
+	successMessage: string;
+	emailNotification: boolean;
+	notificationEmail?: string;
+}
+
+export interface FormConfig {
+	nodeId: string;
+	title: string;
+	fields: FormField[];
+	settings: FormSettings;
+}
