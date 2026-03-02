@@ -3,7 +3,7 @@
 Project root: `/home/zkh/Workbench/a2ztech/svelte-press`
 License: MIT — Copyright A to Z Tech Innovations LLC (https://a2ztech.io)
 
-Feature-complete WordPress clone built with SvelteKit 2 + Svelte 5 + TypeScript.
+WordPress clone built with SvelteKit 2 + Svelte 5 + TypeScript. Version: **0.9.0-beta**.
 Admin routes use `sp-*` prefix (never `wp-*`).
 
 Git repo on `master`
@@ -445,8 +445,9 @@ src/routes/
 │           ├── media/
 │           └── permalinks/
 ├── (frontend)/                 # public theme-aware routes
-│   ├── +layout.svelte          # injects active theme CSS link
-│   ├── +page.svelte            # blog home
+│   ├── +layout.svelte          # injects active theme CSS link; reads template for full-width
+│   ├── +page.svelte            # homepage: static front page OR blog listing
+│   ├── blog/                   # /blog — post listing (when static front page is active)
 │   ├── [slug]/                 # post or page (+ password gate for private posts)
 │   ├── [year=year]/[month=month]/          # date archives
 │   ├── [year=year]/[month=month]/[slug]/   # month+name permalink structure
@@ -457,9 +458,15 @@ src/routes/
 │   ├── author/[username]/
 │   └── search/
 ├── api/
-│   ├── v1/posts/, pages/, media/, comments/, users/, categories/, tags/
-│   ├── v1/forms/, v1/forms/[id]/   # form CRUD (auth-guarded writes)
-│   ├── v1/form-submissions/        # GET (paginated, CSV export); POST (public submit)
+│   ├── v1/posts/, v1/posts/[id]/           # collection + single CRUD
+│   ├── v1/pages/, v1/pages/[id]/
+│   ├── v1/media/, v1/media/[id]/
+│   ├── v1/comments/, v1/comments/[id]/
+│   ├── v1/users/, v1/users/[id]/
+│   ├── v1/categories/, v1/categories/[id]/
+│   ├── v1/tags/, v1/tags/[id]/
+│   ├── v1/forms/, v1/forms/[id]/           # form CRUD (auth-guarded writes)
+│   ├── v1/form-submissions/                # GET (paginated, CSV export); POST (public submit)
 │   ├── upload/                 # multipart file upload
 │   └── oembed/                 # oEmbed proxy endpoint
 └── themes/[theme]/style.css/   # serves theme CSS from filesystem
@@ -509,6 +516,8 @@ Theme CSS variables (set by active theme's `style.css`):
 --theme-color-bg, --theme-color-surface, --theme-color-text, --theme-color-muted
 --theme-color-accent, --theme-color-border
 --theme-max-width, --theme-sidebar-width
+--theme-header-bg, --theme-header-text, --theme-header-border   (optional, fall back to defaults)
+--theme-footer-bg, --theme-footer-text                          (optional, fall back to defaults)
 ```
 
 ---
@@ -554,6 +563,13 @@ bytesToHuman(bytes)    // 1024 → "1.0 KB"
 getMediaUrl(path)      // strips static/ prefix for browser URL
 getPermalinkUrl(post, structure) // generates canonical URL based on permalink structure
 // post: { id, slug, postDate }; structure: e.g. '/%postname%/', '/%year%/%monthnum%/%postname%/'
+```
+
+**`src/lib/server/render-content.ts`** — SSR-safe Tiptap content renderer:
+```ts
+import { renderTiptapContent } from '$lib/server/render-content.js';
+// Walks doc nodes; injects html nodes as raw HTML; skips form nodes; passes rest through tiptapToHtml
+const html = renderTiptapContent(tiptapDoc);
 ```
 
 ---
@@ -605,6 +621,7 @@ All features are complete and working end-to-end:
 - **Posts & Pages CRUD** — list, new, edit (with Tiptap editor), trash/restore (preserves pre-trash status), visibility selector
 - **Scheduled posts** — `status='future'`; "Scheduled" tab in admin list; node-cron auto-publishes every minute
 - **Tiptap editor** — ProseMirror-based, 22 block types, toolbar, block inserter, Svelte 5 node views; content stored as Tiptap JSON; backward-compatible rendering for legacy Block[] posts
+- **HTML block rendering** — `renderTiptapContent()` in `src/lib/server/render-content.ts` walks doc nodes and injects `html` node `rawHtml` directly (bypasses `generateHTML` which cannot inject innerHTML from node attributes)
 - **Columns block** — two-column layout with full nested block support per column (no recursive columns)
 - **Embed block** — oEmbed fetch via `/api/oembed` for YouTube, Vimeo, Twitter/X, SoundCloud, Spotify, Instagram, TikTok
 - **Gallery block** — multi-image grid with full-screen lightbox via event delegation
@@ -616,16 +633,19 @@ All features are complete and working end-to-end:
 - **Categories & Tags** — split-panel add/edit/delete
 - **Users** — list with role tabs, new/edit, role management, **custom avatar upload** (sharp 96×96 WebP)
 - **Settings** — all 6 settings pages (general, reading, writing, discussion, media, permalinks)
-- **Menus builder** — tab panels for pages/posts/custom links/categories, up/down reorder
+- **Menus builder** — tab panels for pages/posts/custom links/categories, up/down reorder; **location assignment persists** to DB and renders correct menu per theme location on frontend
 - **Widgets** — areas, available widgets, **drag-and-drop reorder persisted** per area
-- **Themes admin** — card grid, activate, details modal; **frontend actually loads per-theme CSS** (default/minimal/magazine)
+- **Themes admin** — card grid, activate, details modal; **frontend loads per-theme CSS** (default/minimal/magazine); header/footer use `--theme-header-*` / `--theme-footer-*` CSS vars with fallbacks
 - **Plugins admin** — table, toggle activate/deactivate; **activation state persisted** in options table and respected at load
 - **Profile** — name, bio, contact, password, avatar upload, 2FA setup/disable
 - **Activity log** — `activity_log` DB table; `logActivity()` helper called from 16+ server files; `/sp-admin/activity` with filters and pagination
 - **Revisions** — slider, side-by-side diff, restore
 - **Tools** — WXR export and import
+- **Static front page** — Reading Settings `show_on_front`/`page_on_front` respected on `/`; falls back to blog listing if page is unpublished
+- **`/blog` route** — dedicated paginated post listing always available; used when static front page is active
+- **Page templates** — `template` DB column wired to frontend layout; Full Width and Blank templates hide the sidebar via `fp-wrap--full` CSS class
 - **Public frontend** — blog home, single post/page, category, tag, author, search, date archives (`/[year]/[month]/`), permalink-aware URLs
-- **REST API** — `/api/v1/` for posts, pages, media, comments, users, categories, tags, forms, form-submissions, upload; **all write endpoints auth-guarded**
+- **REST API** — full CRUD at `/api/v1/` for posts, pages, media, comments, users, categories, tags, forms, form-submissions, upload; **all write endpoints auth-guarded**; individual `[id]` routes for all resource types (GET/PUT/DELETE)
 - **Form Builder** — `FormBlock` Tiptap extension (atom node), 3-tab node view (Fields/Settings/Preview), 12 field types with drag-and-drop reorder; `syncFormToDb()` called on every post/page save; `FormRenderer.svelte` for frontend; admin submissions inbox at `/sp-admin/form-submissions`; CSV export; spam honeypot; optional email notification per form
 
 ---

@@ -4,7 +4,7 @@
 
 A full-featured, open-source WordPress clone built from scratch with SvelteKit 2, Svelte 5, TypeScript, and SQLite. Familiar WordPress-style admin, Tiptap-powered rich text editor, plugin hooks, theme switching, and a clean public frontend — with zero PHP.
 
-**License:** MIT &nbsp;|&nbsp; **Stack:** SvelteKit 2 · Svelte 5 · TypeScript · SQLite · Drizzle ORM · Tailwind CSS v4 · Tiptap 3 · Vitest
+**Version:** 0.9.0-beta &nbsp;|&nbsp; **License:** MIT &nbsp;|&nbsp; **Stack:** SvelteKit 2 · Svelte 5 · TypeScript · SQLite · Drizzle ORM · Tailwind CSS v4 · Tiptap 3 · Vitest
 
 ---
 
@@ -270,7 +270,8 @@ All admin routes live under `/sp-admin/`:
 
 | Route | Description |
 |---|---|
-| `/` | Paginated blog home |
+| `/` | Blog home (paginated post listing) or static front page — configurable via Reading Settings |
+| `/blog` | Paginated post listing (used when a static front page is set) |
 | `/[slug]` | Single post or page with threaded comments |
 | `/[slug]` (password-protected) | Password gate for private posts; unlocked via cookie |
 | `/category/[slug]` | Category archive |
@@ -282,7 +283,12 @@ All admin routes live under `/sp-admin/`:
 | `/[year]/[month]/[day]/[slug]` | Day+name permalink structure |
 | `/archives/[id]` | Numeric permalink structure |
 
-Frontend features: header with primary nav, sidebar with widgets (search, categories, archives), footer, threaded comment form on posts, Gravatar avatars, responsive layout, active theme CSS loaded dynamically.
+Frontend features: header with primary nav (pulls from assigned primary menu), sidebar with widgets (search, categories, archives), footer, threaded comment form on posts, Gravatar avatars, responsive layout, active theme CSS loaded dynamically.
+
+**Page templates** — pages support three templates selectable from the editor sidebar:
+- `Default Template` — standard two-column layout with sidebar
+- `Full Width` — single-column layout, sidebar hidden
+- `Blank` — no sidebar, minimal chrome
 
 ---
 
@@ -333,11 +339,30 @@ Three themes ship by default:
 ```css
 /* themes/my-theme/style.css */
 :root {
+  /* Typography */
   --theme-font-body: Georgia, serif;
   --theme-font-heading: sans-serif;
+
+  /* Colors */
+  --theme-color-bg: #ffffff;
+  --theme-color-surface: #f9f9f9;
+  --theme-color-text: #1d2327;
+  --theme-color-muted: #646970;
   --theme-color-accent: #2271b1;
+  --theme-color-border: #e0e0e0;
+
+  /* Layout */
   --theme-max-width: 780px;
   --theme-sidebar-width: 280px;
+
+  /* Header (optional — falls back to defaults if not set) */
+  --theme-header-bg: #ffffff;
+  --theme-header-text: #1d2327;
+  --theme-header-border: #e0e0e0;
+
+  /* Footer (optional) */
+  --theme-footer-bg: #f9f9f9;
+  --theme-footer-text: #646970;
 }
 ```
 
@@ -350,12 +375,19 @@ All endpoints at `/api/v1/` support standard CRUD. Authentication uses the same 
 | Endpoint | Methods | Auth required |
 |---|---|---|
 | `/api/v1/posts` | GET, POST | POST: `edit_posts` |
+| `/api/v1/posts/[id]` | GET, PUT, DELETE | PUT: `edit_posts`; DELETE: `delete_posts` |
 | `/api/v1/pages` | GET, POST | POST: `edit_pages` |
-| `/api/v1/media` | GET, PATCH, DELETE | PATCH/DELETE: `upload_files` |
+| `/api/v1/pages/[id]` | GET, PUT, DELETE | PUT: `edit_pages`; DELETE: `delete_pages` |
+| `/api/v1/media` | GET, POST | POST: `upload_files` |
+| `/api/v1/media/[id]` | GET, PUT, DELETE | PUT/DELETE: `upload_files` |
 | `/api/v1/comments` | GET, POST | POST: public (guest comments → pending) |
+| `/api/v1/comments/[id]` | GET, PUT, DELETE | PUT/DELETE: `moderate_comments` |
 | `/api/v1/users` | GET, POST | GET+POST: `manage_users` |
+| `/api/v1/users/[id]` | GET, PUT, DELETE | GET: `list_users`; PUT/DELETE: `manage_users` |
 | `/api/v1/categories` | GET, POST | POST: `manage_categories` |
+| `/api/v1/categories/[id]` | GET, PUT, DELETE | PUT/DELETE: `manage_categories` |
 | `/api/v1/tags` | GET, POST | POST: `manage_categories` |
+| `/api/v1/tags/[id]` | GET, PUT, DELETE | PUT/DELETE: `manage_categories` |
 | `/api/v1/forms` | GET, POST | POST: `edit_posts` |
 | `/api/v1/forms/[id]` | GET, PUT, DELETE | PUT/DELETE: `edit_posts` |
 | `/api/v1/form-submissions` | GET, POST | GET: `manage_options`; POST: public |
@@ -388,7 +420,7 @@ Emails sent:
 
 ## Known Issues & Incomplete Features
 
-The project is feature-complete. The following items are intentionally out of scope for v1.
+This is a 0.9.0-beta release. Core functionality is complete and working end-to-end.
 
 ### Incomplete Features
 
@@ -396,10 +428,7 @@ The project is feature-complete. The following items are intentionally out of sc
 |---|---|
 | **Akismet / spam filtering** | The Akismet plugin stub exists but makes no real API calls |
 | **Import validation** | WXR import does not validate for duplicate slugs or missing authors |
-
-### Not Yet Implemented
-
-- **Multisite** — Single-site only
+| **Multisite** | Single-site only |
 
 ---
 
@@ -416,9 +445,10 @@ svelte-press/
 │   │   │   │   ├── BlockInserterMenu.svelte
 │   │   │   │   ├── MediaPickerDialog.svelte
 │   │   │   │   └── node-views/  # Svelte node view components
-│   │   │   ├── blocks/          # Legacy block components (kept for reference)
+│   │   │   ├── frontend/
+│   │   │   │   └── PostList.svelte     # Shared paginated post listing component
 │   │   │   ├── GalleryLightbox.svelte  # Full-screen gallery lightbox
-│   │   │   └── Comment.svelte   # Recursive threaded comment component
+│   │   │   └── Comment.svelte          # Recursive threaded comment component
 │   │   ├── editor/              # Tiptap editor core
 │   │   │   ├── use-editor.svelte.ts         # Svelte 5 $state hook
 │   │   │   ├── SvelteNodeViewRenderer.svelte.ts  # ProseMirror node view renderer
@@ -432,9 +462,11 @@ svelte-press/
 │   │   │   ├── api/             # REST API auth helpers
 │   │   │   ├── db/              # Drizzle schema, migrations, seed
 │   │   │   ├── email/           # nodemailer email service
+│   │   │   ├── forms/           # Form sync, Zod schema generation, CSV export
 │   │   │   ├── media/           # sharp image processing
 │   │   │   ├── permissions/     # Role capabilities
 │   │   │   ├── plugins/         # Hook system + loader
+│   │   │   ├── render-content.ts  # renderTiptapContent() — walks doc, injects raw HTML nodes
 │   │   │   ├── scheduler/       # node-cron scheduled publishing
 │   │   │   └── themes/          # Theme loader
 │   │   └── utils.ts             # slugify, formatDate, truncate, getPermalinkUrl, etc.
@@ -446,7 +478,10 @@ svelte-press/
 │       ├── (admin)/sp-admin/    # All admin routes
 │       ├── (auth)/              # Login, register, forgot password
 │       ├── (frontend)/          # Public blog routes (theme-aware)
-│       ├── api/v1/              # REST API
+│       │   ├── +page.svelte     # Homepage (static front page or blog listing)
+│       │   ├── blog/            # /blog — post listing (when static front page is set)
+│       │   └── [slug]/          # Single post/page
+│       ├── api/v1/              # REST API (collections + [id] CRUD for all resources)
 │       ├── api/oembed/          # oEmbed proxy
 │       └── themes/[theme]/      # Theme CSS file server
 ├── plugins/                     # Plugin directory
