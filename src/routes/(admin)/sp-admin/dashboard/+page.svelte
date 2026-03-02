@@ -113,7 +113,7 @@
 				</div>
 
 				<div style="padding: 10px 16px; font-size:12px; color:var(--sp-text-muted);">
-					<span style="color:var(--sp-success)">●</span> Running SveltePress 1.0.0
+					<span style="color:var(--sp-success)">●</span> Running SveltePress 1.2.0
 				</div>
 			</div>
 		</div>
