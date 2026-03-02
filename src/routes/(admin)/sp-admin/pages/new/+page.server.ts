@@ -8,8 +8,10 @@ import { nanoid } from 'nanoid';
 import { logActivity } from '$lib/server/activity/index.js';
 import { syncFormToDb } from '$lib/server/forms/index.js';
 import type { FormField, FormSettings } from '$lib/types/index.js';
+import { can } from '$lib/server/permissions/index.js';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	if (!can(locals.user?.role, 'edit_pages')) redirect(302, '/sp-admin/dashboard');
 	const allPages = db
 		.select({ id: posts.id, title: posts.title, parentId: posts.parentId })
 		.from(posts)

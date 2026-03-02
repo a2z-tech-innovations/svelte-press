@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { db } from './index.js';
-import { users, options, terms } from './schema.js';
+import { users, account, options, terms } from './schema.js';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { readdirSync, existsSync } from 'fs';
@@ -21,16 +21,45 @@ async function seed() {
 	const existing = await db.select().from(users).where(eq(users.username, 'admin')).limit(1);
 	if (existing.length === 0) {
 		const passwordHash = await bcrypt.hash('password', 12);
-		await db.insert(users).values({
+		const [newAdmin] = await db.insert(users).values({
 			username: 'admin',
 			email: 'admin@sveltepress.local',
 			passwordHash,
 			displayName: 'Administrator',
 			role: 'admin'
+		}).returning({ id: users.id });
+
+		// Create Better Auth account record so admin can sign in
+		await db.insert(account).values({
+			id: crypto.randomUUID(),
+			userId: newAdmin.id,
+			accountId: String(newAdmin.id),
+			providerId: 'credential',
+			password: passwordHash,
+			createdAt: new Date(),
+			updatedAt: new Date()
 		});
 		console.log('  ✓ Created admin user (admin / password)');
 	} else {
-		console.log('  – Admin user already exists');
+		// Ensure account record exists for existing admin
+		const adminUser = existing[0];
+		const { account: accountTable } = await import('./schema.js');
+		const existingAccount = db.select().from(accountTable)
+			.where(eq(accountTable.userId, adminUser.id)).get();
+		if (!existingAccount && adminUser.passwordHash) {
+			await db.insert(accountTable).values({
+				id: crypto.randomUUID(),
+				userId: adminUser.id,
+				accountId: String(adminUser.id),
+				providerId: 'credential',
+				password: adminUser.passwordHash,
+				createdAt: new Date(),
+				updatedAt: new Date()
+			});
+			console.log('  – Admin user already exists (account record created)');
+		} else {
+			console.log('  – Admin user already exists');
+		}
 	}
 
 	// ── Default options ─────────────────────────────────────────────────────

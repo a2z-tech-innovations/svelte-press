@@ -5,8 +5,6 @@ import { posts, users, postTerms, terms, comments, options } from '$lib/server/d
 import { eq, desc, and, count, sql } from 'drizzle-orm';
 import { getPermalinkUrl } from '$lib/utils.js';
 
-const PER_PAGE = 10;
-
 export const load: PageServerLoad = async ({ url }) => {
 	// Handle ?p=<id> — supports the "plain" permalink structure
 	// When ?p=<id> is in the URL, redirect to the canonical permalink for the post.
@@ -45,8 +43,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		}
 	}
 
+	const pppOpt = db.select({ optionValue: options.optionValue }).from(options).where(eq(options.optionName, 'posts_per_page')).get();
+	const perPage = Math.max(1, Math.min(100, Number(pppOpt?.optionValue ?? 10)));
+
 	const page = Math.max(1, Number(url.searchParams.get('page') ?? '1'));
-	const offset = (page - 1) * PER_PAGE;
+	const offset = (page - 1) * perPage;
 
 	const whereClause = and(eq(posts.postType, 'post'), eq(posts.status, 'publish'));
 
@@ -73,7 +74,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		.leftJoin(users, eq(posts.authorId, users.id))
 		.where(whereClause)
 		.orderBy(desc(posts.sticky), desc(posts.postDate))
-		.limit(PER_PAGE)
+		.limit(perPage)
 		.offset(offset)
 		.all();
 
@@ -150,7 +151,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		posts: enrichedPosts,
 		page,
 		total: Number(total),
-		perPage: PER_PAGE,
+		perPage: perPage,
 		recentPosts
 	};
 };

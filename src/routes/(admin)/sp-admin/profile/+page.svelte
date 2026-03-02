@@ -174,9 +174,9 @@
 			<table class="sp-settings-table">
 				<tbody>
 					<tr>
-						<th><label class="sp-label">Username</label></th>
+						<th><label class="sp-label" for="profile-username">Username</label></th>
 						<td>
-							<input type="text" class="sp-input" value={data.user.username} readonly style="background:#f6f7f7;" />
+							<input id="profile-username" type="text" class="sp-input" value={data.user.username} readonly style="background:#f6f7f7;" />
 							<p style="font-size:12px;color:var(--sp-text-muted);margin-top:4px;">Usernames cannot be changed.</p>
 						</td>
 					</tr>
