@@ -14,7 +14,9 @@ export const GET: RequestHandler = async (event) => {
 
 	const url = event.url;
 	const page = Math.max(1, Number(url.searchParams.get('page') ?? '1'));
-	const formId = url.searchParams.get('formId') ? Number(url.searchParams.get('formId')) : null;
+	const formId = (url.searchParams.get('formId') ?? url.searchParams.get('form'))
+		? Number(url.searchParams.get('formId') ?? url.searchParams.get('form'))
+		: null;
 	const status = url.searchParams.get('status') ?? '';
 	const exportCsv = url.searchParams.get('export') === 'csv';
 	const perPage = 20;
@@ -28,13 +30,42 @@ export const GET: RequestHandler = async (event) => {
 	const whereClause = conditions.length ? and(...conditions) : sql`1=1`;
 
 	if (exportCsv) {
-		const allSubs = db.select().from(formSubmissions).where(whereClause).orderBy(desc(formSubmissions.createdAt)).all();
+		const allSubs = db
+			.select({
+				id: formSubmissions.id,
+				formId: formSubmissions.formId,
+				data: formSubmissions.data,
+				status: formSubmissions.status,
+				ipAddress: formSubmissions.ipAddress,
+				userAgent: formSubmissions.userAgent,
+				createdAt: formSubmissions.createdAt
+			})
+			.from(formSubmissions)
+			.where(whereClause)
+			.orderBy(desc(formSubmissions.createdAt))
+			.all();
 		let fields: FormField[] = [];
 		if (formId) {
+			// Single-form export: use that form's field schema for column headers
 			const formRow = db.select({ fields: forms.fields }).from(forms).where(eq(forms.id, formId)).get();
 			fields = (formRow?.fields as unknown as FormField[]) ?? [];
+		} else {
+			// All-forms export: derive field columns from union of all data keys
+			const dataKeys = new Set<string>();
+			for (const sub of allSubs) {
+				const d = (sub.data as Record<string, unknown>) ?? {};
+				for (const k of Object.keys(d)) {
+					if (!k.startsWith('_')) dataKeys.add(k);
+				}
+			}
+			fields = Array.from(dataKeys).map((k) => ({
+				id: k,
+				type: 'text' as const,
+				label: k,
+				required: false
+			}));
 		}
-		const csv = buildCsv(allSubs, fields);
+		const csv = buildCsv(allSubs as Parameters<typeof buildCsv>[0], fields);
 		return new Response(csv, {
 			headers: {
 				'Content-Type': 'text/csv',

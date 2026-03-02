@@ -18,25 +18,28 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// Load all forms for filter dropdown
 	const allForms = db.select({ id: forms.id, title: forms.title }).from(forms).all();
 
-	// Build where clause
+	// Build where clause — "all" view excludes trash (matching WordPress behaviour)
 	const conditions = [];
 	if (statusFilter && statusFilter !== 'all') {
 		conditions.push(eq(formSubmissions.status, statusFilter as 'unread' | 'read' | 'spam' | 'trash'));
+	} else {
+		conditions.push(sql`${formSubmissions.status} != 'trash'`);
 	}
 	if (formIdFilter) {
 		conditions.push(eq(formSubmissions.formId, formIdFilter));
 	}
-	const whereClause = conditions.length ? and(...conditions) : sql`1=1`;
+	const whereClause = and(...conditions);
 
 	// Status counts
 	const allSubs = db
 		.select({ status: formSubmissions.status })
 		.from(formSubmissions)
-		.where(formIdFilter ? eq(formSubmissions.formId, formIdFilter) : sql`1=1`)
+		.where(formIdFilter ? eq(formSubmissions.formId, formIdFilter) : undefined)
 		.all();
-	const counts: Record<string, number> = { all: allSubs.length, unread: 0, read: 0, spam: 0, trash: 0 };
+	const counts: Record<string, number> = { all: 0, unread: 0, read: 0, spam: 0, trash: 0 };
 	for (const s of allSubs) {
 		counts[s.status] = (counts[s.status] ?? 0) + 1;
+		if (s.status !== 'trash') counts.all++;
 	}
 
 	const submissions = db

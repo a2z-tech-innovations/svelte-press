@@ -26,7 +26,7 @@
 
 	function getFirstFieldValue(sub: typeof data.submissions[number]): string {
 		if (!sub.data || typeof sub.data !== 'object') return '—';
-		const entries = Object.entries(sub.data as Record<string, unknown>);
+		const entries = Object.entries(sub.data as Record<string, unknown>).filter(([k]) => !k.startsWith('_'));
 		if (entries.length === 0) return '—';
 		const val = entries[0][1];
 		const str = String(val ?? '');
@@ -46,13 +46,15 @@
 		spam: 'sp-badge-yellow',
 		trash: 'sp-badge-red'
 	};
+
+	const isTrashView = $derived(data.statusFilter === 'trash');
 </script>
 
 <div class="sp-page-header">
 	<h1 class="sp-page-title">Form Submissions</h1>
 	{#if data.allForms.length > 0}
 		<a
-			href="/api/v1/form-submissions?export=csv{data.formIdFilter ? '&form=' + data.formIdFilter : ''}"
+			href="/api/v1/form-submissions?export=csv{data.formIdFilter ? '&formId=' + data.formIdFilter : ''}{data.statusFilter && data.statusFilter !== 'all' ? '&status=' + data.statusFilter : ''}"
 			class="sp-btn sp-btn-secondary sp-btn-sm"
 		>
 			Export CSV
@@ -120,8 +122,40 @@
 	</div>
 {/if}
 
-<!-- Bulk Actions -->
-<form method="POST" action="?/bulkAction" use:enhance>
+<!--
+  Per-row action forms — placed outside the table to avoid nested <form> elements.
+  Buttons in table rows reference these via the HTML `form` attribute.
+-->
+{#each data.submissions as sub}
+	<form id="sp-del-{sub.id}" method="POST" action="?/delete" use:enhance style="display:none">
+		<input type="hidden" name="id" value={sub.id} />
+	</form>
+	<form id="sp-trash-{sub.id}" method="POST" action="?/updateStatus" use:enhance style="display:none">
+		<input type="hidden" name="id" value={sub.id} />
+		<input type="hidden" name="status" value="trash" />
+	</form>
+	<form id="sp-restore-{sub.id}" method="POST" action="?/updateStatus" use:enhance style="display:none">
+		<input type="hidden" name="id" value={sub.id} />
+		<input type="hidden" name="status" value="read" />
+	</form>
+	<form id="sp-read-{sub.id}" method="POST" action="?/updateStatus" use:enhance style="display:none">
+		<input type="hidden" name="id" value={sub.id} />
+		<input type="hidden" name="status" value="read" />
+	</form>
+	<form id="sp-spam-{sub.id}" method="POST" action="?/updateStatus" use:enhance style="display:none">
+		<input type="hidden" name="id" value={sub.id} />
+		<input type="hidden" name="status" value="spam" />
+	</form>
+{/each}
+
+<!-- Bulk Actions form — contains only the control bar + hidden selected IDs -->
+<form id="sp-bulk-form" method="POST" action="?/bulkAction" use:enhance={() => {
+	return async ({ update }) => {
+		selectedIds = [];
+		bulkAction = '';
+		await update();
+	};
+}}>
 	<div class="sp-bulk-bar" style="margin-bottom:12px; display:flex; gap:8px; align-items:center">
 		<select name="bulkAction" class="sp-select sp-select-sm" bind:value={bulkAction}>
 			<option value="">Bulk Actions</option>
@@ -141,78 +175,96 @@
 			<span class="sp-text-muted" style="font-size:0.8125rem">{selectedIds.length} selected</span>
 		{/if}
 	</div>
+</form>
 
-	<div class="sp-table-wrap">
-		<table class="sp-table">
-			<thead>
+<!-- Table — separate from both the bulk form and row forms -->
+<div class="sp-table-wrap">
+	<table class="sp-table">
+		<thead>
+			<tr>
+				<th style="width:32px">
+					<input
+						type="checkbox"
+						onchange={(e) => toggleAll((e.target as HTMLInputElement).checked)}
+						checked={selectedIds.length === data.submissions.length && data.submissions.length > 0}
+					/>
+				</th>
+				<th>#</th>
+				<th>Form</th>
+				<th>Preview</th>
+				<th>Date</th>
+				<th>Status</th>
+				<th>Actions</th>
+			</tr>
+		</thead>
+		<tbody>
+			{#if data.submissions.length === 0}
 				<tr>
-					<th style="width:32px">
-						<input
-							type="checkbox"
-							onchange={(e) => toggleAll((e.target as HTMLInputElement).checked)}
-							checked={selectedIds.length === data.submissions.length && data.submissions.length > 0}
-						/>
-					</th>
-					<th>#</th>
-					<th>Form</th>
-					<th>Preview</th>
-					<th>Date</th>
-					<th>Status</th>
-					<th>Actions</th>
+					<td colspan="7" style="text-align:center; padding:2rem; color:#646970">
+						No submissions found.
+					</td>
 				</tr>
-			</thead>
-			<tbody>
-				{#if data.submissions.length === 0}
-					<tr>
-						<td colspan="7" style="text-align:center; padding:2rem; color:#646970">
-							No submissions found.
+			{:else}
+				{#each data.submissions as sub}
+					<tr class:sp-row-unread={sub.status === 'unread'}>
+						<td>
+							<input
+								type="checkbox"
+								checked={selectedIds.includes(sub.id)}
+								onchange={(e) => toggleId(sub.id, (e.target as HTMLInputElement).checked)}
+							/>
+						</td>
+						<td>
+							<a href="/sp-admin/form-submissions/{sub.id}" class="sp-link">#{sub.id}</a>
+						</td>
+						<td>{sub.formTitle ?? '—'}</td>
+						<td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#646970; font-size:0.875rem">
+							{getFirstFieldValue(sub)}
+						</td>
+						<td style="white-space:nowrap; color:#646970; font-size:0.8125rem">
+							{sub.createdAt ? formatDate(sub.createdAt) : '—'}
+						</td>
+						<td>
+							<span class="sp-badge {statusColors[sub.status] ?? ''}">
+								{statusLabels[sub.status] ?? sub.status}
+							</span>
+						</td>
+						<td>
+							<div class="sp-row-actions">
+								<a href="/sp-admin/form-submissions/{sub.id}" class="sp-link">View</a>
+								{#if isTrashView}
+									<button
+										type="submit"
+										form="sp-restore-{sub.id}"
+										class="sp-row-action-btn"
+									>Restore</button>
+									<button
+										type="submit"
+										form="sp-del-{sub.id}"
+										class="sp-row-action-btn sp-row-action-danger"
+										onclick={(e) => { if (!confirm('Delete permanently?')) e.preventDefault(); }}
+									>Delete</button>
+								{:else}
+									{#if sub.status === 'unread'}
+										<button type="submit" form="sp-read-{sub.id}" class="sp-row-action-btn">Mark Read</button>
+									{/if}
+									{#if sub.status !== 'spam'}
+										<button type="submit" form="sp-spam-{sub.id}" class="sp-row-action-btn">Spam</button>
+									{/if}
+									<button
+										type="submit"
+										form="sp-trash-{sub.id}"
+										class="sp-row-action-btn sp-row-action-danger"
+									>Trash</button>
+								{/if}
+							</div>
 						</td>
 					</tr>
-				{:else}
-					{#each data.submissions as sub}
-						<tr class:sp-row-unread={sub.status === 'unread'}>
-							<td>
-								<input
-									type="checkbox"
-									checked={selectedIds.includes(sub.id)}
-									onchange={(e) => toggleId(sub.id, (e.target as HTMLInputElement).checked)}
-								/>
-							</td>
-							<td>
-								<a href="/sp-admin/form-submissions/{sub.id}" class="sp-link">#{sub.id}</a>
-							</td>
-							<td>{sub.formTitle ?? '—'}</td>
-							<td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#646970; font-size:0.875rem">
-								{getFirstFieldValue(sub)}
-							</td>
-							<td style="white-space:nowrap; color:#646970; font-size:0.8125rem">
-								{sub.createdAt ? formatDate(sub.createdAt) : '—'}
-							</td>
-							<td>
-								<span class="sp-badge {statusColors[sub.status] ?? ''}">
-									{statusLabels[sub.status] ?? sub.status}
-								</span>
-							</td>
-							<td>
-								<div class="sp-row-actions">
-									<a href="/sp-admin/form-submissions/{sub.id}" class="sp-link">View</a>
-									<form method="POST" action="?/delete" use:enhance style="display:inline">
-										<input type="hidden" name="id" value={sub.id} />
-										<button
-											type="submit"
-											class="sp-row-action-btn sp-row-action-danger"
-											onclick={(e) => { if (!confirm('Delete this submission permanently?')) e.preventDefault(); }}
-										>Delete</button>
-									</form>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				{/if}
-			</tbody>
-		</table>
-	</div>
-</form>
+				{/each}
+			{/if}
+		</tbody>
+	</table>
+</div>
 
 <!-- Pagination -->
 {#if data.totalPages > 1}
@@ -279,14 +331,15 @@
 		cursor: pointer;
 		font-size: 0.8125rem;
 		font-family: inherit;
+		color: #2271b1;
+	}
+
+	.sp-row-action-btn:hover {
+		text-decoration: underline;
 	}
 
 	.sp-row-action-danger {
 		color: #d63638;
-	}
-
-	.sp-row-action-danger:hover {
-		text-decoration: underline;
 	}
 
 	.sp-link {
@@ -300,5 +353,12 @@
 
 	.sp-filter-bar select {
 		min-width: 160px;
+	}
+
+	.sp-row-actions {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		flex-wrap: wrap;
 	}
 </style>

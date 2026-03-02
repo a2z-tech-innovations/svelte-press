@@ -6,6 +6,8 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let currentStatus = $state(data.submission.status);
+	// Re-sync when load() re-runs after a form action
+	$effect(() => { currentStatus = data.submission.status; });
 
 	const statusLabels: Record<string, string> = {
 		unread: 'Unread',
@@ -41,6 +43,12 @@
 		<a href="/sp-admin/form-submissions" class="sp-btn sp-btn-secondary sp-btn-sm">
 			&larr; Back to List
 		</a>
+		{#if currentStatus === 'trash'}
+			<form method="POST" action="?/updateStatus" use:enhance>
+				<input type="hidden" name="status" value="read" />
+				<button type="submit" class="sp-btn sp-btn-secondary sp-btn-sm">Restore</button>
+			</form>
+		{/if}
 		<form method="POST" action="?/delete" use:enhance>
 			<button
 				type="submit"
